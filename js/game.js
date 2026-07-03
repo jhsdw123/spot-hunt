@@ -51,6 +51,22 @@ export class Round {
   // freeze the round without firing win/lose callbacks (versus: opponent finished first)
   halt() { this.finished = true; this.running = false; }
 
+  // show where the remaining answers were (timeout / review phase)
+  revealAnswers() {
+    this.puzzle.regions.forEach((r, i) => {
+      if (this.found.has(i)) return;
+      this.els.inners.forEach(inner => {
+        if (inner.querySelector(`.reveal-ring[data-i="${i}"]`)) return;
+        const ring = document.createElement('div');
+        ring.className = 'reveal-ring';
+        ring.dataset.i = i;
+        ring.style.left = `${r.x}%`; ring.style.top = `${r.y}%`;
+        ring.style.width = ring.style.height = `${Math.max(r.radius, 5) * 2.4}%`;
+        inner.appendChild(ring);
+      });
+    });
+  }
+
   _pause() { this.running = false; }
   _resume() { if (!this.destroyed && !this.finished) { this.running = true; this._lastTs = performance.now(); } }
 
@@ -59,7 +75,7 @@ export class Round {
     cancelAnimationFrame(this._raf);
     document.removeEventListener('visibilitychange', this._onVis);
     for (const [el, type, fn] of this._handlers) el.removeEventListener(type, fn);
-    this.els.panels.forEach(p => p.querySelectorAll('.marker,.hint-ring,.miss-x').forEach(m => m.remove()));
+    this.els.panels.forEach(p => p.querySelectorAll('.marker,.hint-ring,.miss-x,.reveal-ring').forEach(m => m.remove()));
   }
 
   /* ---------- timer ---------- */

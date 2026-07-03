@@ -32,6 +32,12 @@ export const sfx = {
   win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, { when: i * 0.1, gain: 0.13 })); },
   lose() { [330, 262, 196].forEach((f, i) => tone(f, 0.3, { when: i * 0.16, type: 'triangle', gain: 0.1 })); },
   click() { tone(700, 0.05, { type: 'triangle', gain: 0.07 }); },
+  siren() {
+    for (let i = 0; i < 3; i++) {
+      tone(760, 0.16, { type: 'square', gain: 0.06, when: i * 0.36 });
+      tone(980, 0.16, { type: 'square', gain: 0.06, when: i * 0.36 + 0.18 });
+    }
+  },
 };
 
 export function toggleMute() {

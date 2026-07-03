@@ -109,7 +109,10 @@ function onWin({ stars, misses, timeUsed }) {
   $('#result').classList.add('on');
 }
 
-function onLose({ found, total }) {
+async function onLose({ found, total }) {
+  // brief answer reveal before the result card
+  state.round?.revealAnswers();
+  await sleep(2600);
   $('#result-title').textContent = "Time's up!";
   $('#result-sub').textContent = `You found ${found} of ${total} differences`;
   $$('#result-stars span').forEach(s => s.classList.remove('on', 'pop'));

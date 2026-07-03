@@ -91,7 +91,8 @@
     <div class="vs-step" data-step="host">
       <p class="vs-label">Tell your friend to enter this code:</p>
       <div class="vs-code-big" id="vs-code-big">····</div>
-      <p class="vs-status" id="vs-status">Waiting for your friend…</p>
+      <p class="vs-status" id="vs-status">Waiting for players…</p>
+      <div id="vs-players-host" class="vs-players"></div>
       <label class="vs-label">Puzzle style</label>
       <div class="chips" id="vs-modes">
         <button class="chip active" data-vs-mode="toon">🖍️ Cartoon</button>
@@ -100,7 +101,7 @@
       </div>
       <button class="play-btn wide" id="vs-start" disabled>
         <span class="play-main">START</span>
-        <span class="play-sub">best of 3 rounds</span>
+        <span class="play-sub">3 rounds · up to 8 players</span>
       </button>
       <button class="ghost-btn" id="vs-leave-host">Cancel</button>
     </div>
@@ -109,6 +110,7 @@
       <p class="vs-label">Joined room</p>
       <div class="vs-code-big" id="vs-code-guest">····</div>
       <p class="vs-status">Waiting for the host to start…</p>
+      <div id="vs-players-guest" class="vs-players"></div>
       <div class="vs-spinner"></div>
       <button class="ghost-btn" id="vs-leave-guest">Leave room</button>
     </div>
@@ -131,11 +133,7 @@
   <div class="found-row">
     <span class="found-label" id="found-count">0/5</span>
     <div id="found-dots"></div>
-    <div class="opp-bar vs-only">
-      <span id="opp-name">Friend</span>
-      <span class="opp-count" id="opp-count">0/5</span>
-      <div id="opp-dots"></div>
-    </div>
+    <div class="opp-list vs-only" id="opp-list"></div>
   </div>
 
   <div class="panels">
@@ -160,6 +158,7 @@
       <div id="result-stars"><span>★</span><span>★</span><span>★</span></div>
       <h2 id="result-title">Great job!</h2>
       <p id="result-sub"></p>
+      <div id="result-list" style="display:none"></div>
       <button class="play-btn small" id="btn-next">Next puzzle →</button>
       <button class="ghost-btn" id="btn-result-home">Home</button>
     </div>

@@ -1,5 +1,5 @@
 // Spot Hunt service worker — app shell precache + runtime image caching.
-const SHELL_CACHE = 'sh-shell-v2';
+const SHELL_CACHE = 'sh-shell-v3';
 const IMG_CACHE = 'sh-img-v1';
 const SHELL = [
   './', 'index.html', 'css/game.css',

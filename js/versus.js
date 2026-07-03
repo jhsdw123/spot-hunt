@@ -1,6 +1,6 @@
-// Versus mode — 2-player race over Supabase Realtime (broadcast + presence).
-// Both players solve the same puzzles on independent boards; live progress is mirrored.
-// Round winner: complete beats incomplete; both complete -> faster; both incomplete -> more found.
+// Versus mode — up to 8 players race over Supabase Realtime (broadcast + presence).
+// Everyone solves the same puzzles on independent boards; live progress is mirrored.
+// Round ranking: completers (by time) ahead of non-completers (by found count).
 import { loadPuzzles } from './data.js';
 import { Round } from './game.js';
 import { sfx, vibrate } from './audio.js';
@@ -8,7 +8,8 @@ import { confetti } from './confetti.js';
 import { SUPABASE_URL, SUPABASE_ANON } from './config.js';
 
 const ROUNDS = 3;
-const CODE_ALPHabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const MAX_PLAYERS = 8;
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -17,34 +18,44 @@ const setImg = (img, src) => new Promise((res, rej) => {
   if (img.src === src && img.complete) return res();
   img.onload = res; img.onerror = rej; img.src = src;
 });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ordinal = n => n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
 
 const vs = {
   sb: null, channel: null, code: '', isHost: false,
   myId: Math.random().toString(36).slice(2, 10),
   myName: localStorage.getItem('sh_name') || '',
-  oppName: '', oppHere: false,
   style: 'toon',
+  roster: [],            // fixed at match start: [{key, name}]
+  leftKeys: new Set(),   // players who disconnected mid-match
   puzzles: [], roundIdx: 0,
-  score: { me: 0, opp: 0 },
-  round: null, myResult: null, oppResult: null, oppReady: false, myReady: false,
-  active: false, inRound: false,
+  results: {},           // this round: key -> {found, complete, elapsed}
+  tally: {},             // key -> {wins, found, elapsed}
+  readySet: new Set(),
+  round: null,
+  active: false, inRound: false, matchOver: false,
+  personalDone: false, hurryFired: false, _counting: false,
   readyTimer: null, resultTimer: null,
 };
+
+export function isActive() { return vs.active; }
+export function currentRound() { return vs.round; }
+export function __presence() { return vs.channel ? vs.channel.presenceState() : null; }
 
 function clearTimers() {
   clearInterval(vs.readyTimer); vs.readyTimer = null;
   clearInterval(vs.resultTimer); vs.resultTimer = null;
 }
 
-export function isActive() { return vs.active; }
-export function currentRound() { return vs.round; }
-export function __presence() { return vs.channel ? vs.channel.presenceState() : null; }
-
 function client() {
   if (!vs.sb) vs.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
     realtime: { params: { eventsPerSecond: 10 } },
   });
   return vs.sb;
+}
+
+function send(event, payload) {
+  vs.channel?.send({ type: 'broadcast', event, payload: { from: vs.myId, ...payload } });
 }
 
 /* ---------- screens/steps ---------- */
@@ -67,12 +78,12 @@ export function open() {
 }
 
 function saveName() {
-  vs.myName = ($('#vs-name').value.trim() || 'Player').slice(0, 12);
+  vs.myName = ($('#vs-name').value.trim() || 'Player' + ((Math.random() * 90 + 10) | 0)).slice(0, 12);
   localStorage.setItem('sh_name', vs.myName);
 }
 
 function makeCode() {
-  return Array.from({ length: 4 }, () => CODE_ALPHabet[(Math.random() * CODE_ALPHabet.length) | 0]).join('');
+  return Array.from({ length: 4 }, () => CODE_ALPHABET[(Math.random() * CODE_ALPHABET.length) | 0]).join('');
 }
 
 async function createRoom() {
@@ -82,8 +93,9 @@ async function createRoom() {
   await joinChannel();
   $('#vs-code-big').textContent = vs.code;
   $('#vs-start').disabled = true;
-  setStatus('Waiting for your friend…');
+  setStatus('Waiting for players…');
   step('host');
+  renderLobby();
 }
 
 async function joinRoom() {
@@ -93,7 +105,6 @@ async function joinRoom() {
   vs.isHost = false;
   vs.code = code;
   await joinChannel();
-  // wait for presence sync to reveal the host (arrival timing varies)
   let others = [];
   for (let i = 0; i < 20 && !others.length; i++) {
     await sleep(300);
@@ -104,22 +115,23 @@ async function joinRoom() {
     await leaveChannel();
     return;
   }
-  if (others.length >= 2) {
-    setEntryMsg('Room is full');
+  if (playersInRoom().length > MAX_PLAYERS) {
+    setEntryMsg(`Room is full (max ${MAX_PLAYERS} players)`);
     await leaveChannel();
     return;
   }
   $('#vs-code-guest').textContent = vs.code;
-  setStatus('Waiting for the host to start…');
   step('guest');
+  renderLobby();
 }
 
 function setEntryMsg(t) { $('#vs-entry-msg').textContent = t; }
 
-function othersInRoom() {
+function playersInRoom() {
   const state = vs.channel?.presenceState() || {};
-  return Object.entries(state).filter(([k]) => k !== vs.myId).map(([, v]) => v[0]);
+  return Object.entries(state).map(([key, metas]) => ({ key, name: metas[0]?.name || 'Player' }));
 }
+function othersInRoom() { return playersInRoom().filter(p => p.key !== vs.myId); }
 
 async function joinChannel() {
   const ch = client().channel(`sh-room-${vs.code}`, {
@@ -141,7 +153,7 @@ async function joinChannel() {
       if (status === 'CHANNEL_ERROR') { clearTimeout(t); rej(new Error('channel error')); }
     });
   });
-  await ch.track({ name: vs.myName, host: vs.isHost });
+  await ch.track({ name: vs.myName });
 }
 
 async function leaveChannel() {
@@ -149,21 +161,40 @@ async function leaveChannel() {
   vs.channel = null;
 }
 
+function renderLobby() {
+  const players = playersInRoom();
+  const rows = players.map(p =>
+    `<div class="vs-player${p.key === vs.myId ? ' me' : ''}">👤 ${esc(p.name)}${p.key === vs.myId ? ' (you)' : ''}</div>`).join('');
+  const html = `<div class="vs-player-list">${rows}</div>
+    <div class="vs-player-count">${players.length}/${MAX_PLAYERS} players</div>`;
+  const hostBox = $('#vs-players-host'), guestBox = $('#vs-players-guest');
+  if (hostBox) hostBox.innerHTML = html;
+  if (guestBox) guestBox.innerHTML = html;
+}
+
 function onPresence() {
-  const others = othersInRoom();
-  const opp = others[0];
-  const wasHere = vs.oppHere;
-  vs.oppHere = !!opp;
-  if (opp) vs.oppName = opp.name || 'Friend';
+  const players = playersInRoom();
+  renderLobby();
 
   if (vs.isHost && !vs.active) {
-    $('#vs-start').disabled = !vs.oppHere;
-    setStatus(vs.oppHere ? `${vs.oppName} joined — ready when you are!` : 'Waiting for your friend…');
-    if (vs.oppHere && !wasHere) sfx.found();
+    const n = players.length;
+    $('#vs-start').disabled = n < 2;
+    setStatus(n < 2 ? 'Waiting for players…' : `${n} players in — ready when you are!`);
   }
-  // opponent left mid-match
-  if (vs.active && wasHere && !vs.oppHere) {
-    endMatchAbrupt(`${vs.oppName || 'Your friend'} left the game`);
+
+  if (vs.active) {
+    // mark leavers; settle may now be possible
+    const present = new Set(players.map(p => p.key));
+    for (const p of vs.roster) {
+      if (!present.has(p.key) && !vs.leftKeys.has(p.key)) {
+        vs.leftKeys.add(p.key);
+        renderOppList();
+      }
+    }
+    const remaining = vs.roster.filter(p => !vs.leftKeys.has(p.key));
+    if (remaining.length < 2) { endMatchAbrupt('Everyone else left the game'); return; }
+    maybeSettle();
+    maybeGoHost();
   }
 }
 
@@ -178,31 +209,40 @@ function pickPuzzles(all, style) {
 async function hostStart() {
   const all = await loadPuzzles();
   const ids = pickPuzzles(all, vs.style);
-  vs.channel.send({ type: 'broadcast', event: 'start_match', payload: { ids, style: vs.style } });
-  await onStartMatch({ ids, style: vs.style });
+  const roster = playersInRoom();
+  send('start_match', { ids, roster });
+  await onStartMatch({ ids, roster });
 }
 
-async function onStartMatch({ ids }) {
+async function onStartMatch({ ids, roster }) {
   const all = await loadPuzzles();
   vs.puzzles = ids.map(id => all.find(e => e.id === id)).filter(Boolean);
+  vs.roster = roster;
+  vs.leftKeys = new Set();
   vs.roundIdx = 0;
-  vs.score = { me: 0, opp: 0 };
+  vs.tally = Object.fromEntries(roster.map(p => [p.key, { wins: 0, found: 0, elapsed: 0 }]));
   vs.active = true;
+  vs.matchOver = false;
   document.body.classList.add('versus');
   beginRound();
 }
 
+function activeOpponents() {
+  return vs.roster.filter(p => p.key !== vs.myId && !vs.leftKeys.has(p.key));
+}
+
 async function beginRound() {
   const puzzle = vs.puzzles[vs.roundIdx];
-  vs.myResult = null; vs.oppResult = null; vs.myReady = false; vs.oppReady = false;
-  vs.inRound = true;
+  vs.results = {}; vs.readySet = new Set([vs.myId]);
+  vs.inRound = true; vs.personalDone = false; vs.hurryFired = false; vs._counting = false;
+  document.body.classList.remove('player-done', 'review');
 
   show('game');
   $('#game-level').textContent = `Round ${vs.roundIdx + 1}/${ROUNDS}`;
   $('#found-count').textContent = `0/${puzzle.count}`;
   renderDots(0, puzzle.count);
-  renderOpp(0, puzzle.count);
-  renderMatchScore();
+  renderOppList();
+  renderScoreline();
   $('#veil').classList.add('on');
   $('#veil-num').textContent = '…';
 
@@ -218,36 +258,38 @@ async function beginRound() {
     onProgress: (found, total) => {
       $('#found-count').textContent = `${found}/${total}`;
       renderDots(found, total);
-      vs.channel?.send({ type: 'broadcast', event: 'progress', payload: { round: vs.roundIdx, found } });
+      send('progress', { round: vs.roundIdx, found });
     },
-    onWin: ({ timeUsed }) => myRoundDone({ complete: true, found: puzzle.count, elapsed: vs.round.elapsed }),
-    onLose: ({ found }) => myRoundDone({ complete: false, found, elapsed: vs.round.elapsed }),
+    onWin: () => myRoundDone({ complete: true, found: puzzle.count, elapsed: +vs.round.elapsed.toFixed(2) }),
+    onLose: () => {
+      // personal timeout: grey out, reveal answers, keep watching others
+      myRoundDone({ complete: false, found: vs.round.found.size, elapsed: +vs.round.elapsed.toFixed(2) });
+    },
   });
   vs.round.resetZoom();
 
-  // ready handshake so a slow connection never starts late; re-send until the
-  // round actually starts (broadcasts are fire-and-forget and can be missed
-  // while the peer is still on the previous round)
-  vs.myReady = true;
-  const sendReady = () => vs.channel?.send({ type: 'broadcast', event: 'ready', payload: { round: vs.roundIdx } });
+  // ready handshake (re-sent — broadcasts can be missed during round transitions)
+  const sendReady = () => send('ready', { round: vs.roundIdx });
   sendReady();
   clearInterval(vs.readyTimer);
   vs.readyTimer = setInterval(() => {
     if (!vs.inRound || vs.round?.running) { clearInterval(vs.readyTimer); return; }
     sendReady();
   }, 1200);
-  maybeGo();
+  maybeGoHost();
 }
 
-function onOppReady({ round }) {
+function onOppReady({ round, from }) {
   if (round !== vs.roundIdx) return;
-  vs.oppReady = true;
-  maybeGo();
+  vs.readySet.add(from);
+  maybeGoHost();
 }
 
-function maybeGo() {
-  if (vs.isHost && vs.myReady && vs.oppReady) {
-    vs.channel.send({ type: 'broadcast', event: 'go', payload: { round: vs.roundIdx } });
+function maybeGoHost() {
+  if (!vs.isHost || !vs.inRound || vs.round?.running || vs._counting) return;
+  const needed = vs.roster.filter(p => !vs.leftKeys.has(p.key)).map(p => p.key);
+  if (needed.every(k => vs.readySet.has(k))) {
+    send('go', { round: vs.roundIdx });
     onGo({ round: vs.roundIdx });
   }
 }
@@ -268,68 +310,141 @@ async function onGo({ round }) {
   vs.round.start();
 }
 
-function onOppProgress({ round, found }) {
+/* ---------- during round ---------- */
+function onOppProgress({ round, from, found }) {
   if (round !== vs.roundIdx) return;
-  renderOpp(found, vs.puzzles[vs.roundIdx].count);
+  const opp = vs.roster.find(p => p.key === from);
+  if (!opp) return;
+  opp.progress = found;
+  renderOppList();
+  // hurry-up alarm: someone is one away from finishing
+  const total = vs.puzzles[vs.roundIdx].count;
+  if (!vs.hurryFired && !vs.personalDone && found >= total - 1 && total >= 3 && vs.round?.running) {
+    vs.hurryFired = true;
+    hurryUp(opp.name);
+  }
+}
+
+function hurryUp(name) {
+  sfx.siren(); vibrate([80, 60, 80, 60, 80]);
+  const el = document.createElement('div');
+  el.className = 'hurry';
+  el.innerHTML = `<div class="hurry-label">🚨 ${esc(name)} is about to finish — HURRY!</div>`;
+  $('#screen-game').appendChild(el);
+  setTimeout(() => el.remove(), 2600);
 }
 
 function myRoundDone(result) {
-  if (vs.myResult) return;
-  vs.myResult = result;
-  const send = () => vs.channel?.send({ type: 'broadcast', event: 'round_done', payload: { round: vs.roundIdx, ...result } });
-  send();
+  if (vs.results[vs.myId]) return;
+  vs.results[vs.myId] = result;
+  vs.personalDone = true;
+
+  if (!result.complete) {
+    // feature 1: grey out my board and show where the answers were
+    document.body.classList.add('player-done');
+    vs.round?.revealAnswers();
+    showDoneBanner("⏱ Time's up — answers revealed. Waiting for others…");
+  }
+
+  const doSend = () => send('round_done', { round: vs.roundIdx, ...result });
+  doSend();
   clearInterval(vs.resultTimer);
-  vs.resultTimer = setInterval(() => { if (vs.oppResult || !vs.active) clearInterval(vs.resultTimer); else send(); }, 1500);
+  vs.resultTimer = setInterval(() => {
+    if (!vs.active || !vs.inRound) { clearInterval(vs.resultTimer); return; }
+    doSend();
+  }, 1500);
   maybeSettle();
 }
 
 function onOppRoundDone(payload) {
   if (payload.round !== vs.roundIdx) return;
-  vs.oppResult = payload;
-  renderOpp(payload.found, vs.puzzles[vs.roundIdx].count);
-  // opponent finished everything while I'm still hunting -> round over for me too
-  if (payload.complete && !vs.myResult && vs.round && !vs.round.finished) {
+  const opp = vs.roster.find(p => p.key === payload.from);
+  if (!opp) return;
+  vs.results[payload.from] = payload;
+  opp.progress = payload.found;
+  opp.status = payload.complete ? 'done' : 'timeout';
+  renderOppList();
+
+  // race rule: the first player to complete everything ends the round for everyone
+  if (payload.complete && !vs.results[vs.myId] && vs.round && !vs.round.finished) {
     vs.round.halt();
-    myRoundDone({ complete: false, found: vs.round.found.size, elapsed: vs.round.elapsed });
+    myRoundDone({ complete: false, found: vs.round.found.size, elapsed: +vs.round.elapsed.toFixed(2) });
+    showDoneBanner(`🏁 ${esc(opp.name)} found them all!`);
     return;
   }
   maybeSettle();
 }
 
+/* ---------- settlement ---------- */
 function maybeSettle() {
-  if (!vs.myResult || !vs.oppResult || !vs.inRound) return;
+  if (!vs.inRound) return;
+  const needed = vs.roster.filter(p => !vs.leftKeys.has(p.key));
+  if (!needed.every(p => vs.results[p.key])) return;
   vs.inRound = false;
   clearTimers();
-  const me = vs.myResult, op = vs.oppResult;
-  let outcome; // 1 win, -1 lose, 0 draw
-  if (me.complete !== op.complete) outcome = me.complete ? 1 : -1;
-  else if (me.complete) outcome = me.elapsed === op.elapsed ? 0 : (me.elapsed < op.elapsed ? 1 : -1);
-  else outcome = me.found === op.found ? 0 : (me.found > op.found ? 1 : -1);
-
-  if (outcome === 1) vs.score.me++;
-  if (outcome === -1) vs.score.opp++;
-  showRoundResult(outcome);
+  settle(needed);
 }
 
-async function showRoundResult(outcome) {
+async function settle(participants) {
+  const total = vs.puzzles[vs.roundIdx].count;
+  const ranking = participants.map(p => ({ ...p, ...vs.results[p.key] }))
+    .sort((a, b) =>
+      (b.complete - a.complete) ||
+      (a.complete ? a.elapsed - b.elapsed : b.found - a.found) ||
+      (a.elapsed - b.elapsed));
+
+  // shared ranks for exact ties
+  ranking.forEach((r, i) => {
+    r.rank = (i > 0 && tieWith(r, ranking[i - 1])) ? ranking[i - 1].rank : i + 1;
+  });
+  for (const r of ranking) {
+    vs.tally[r.key].found += r.found;
+    vs.tally[r.key].elapsed += r.elapsed;
+    if (r.rank === 1) vs.tally[r.key].wins++;
+  }
+  renderScoreline();
+
+  // feature 3: answer review window before the scoreboard
+  document.body.classList.add('review');
+  vs.round?.revealAnswers();
+  showDoneBanner('🔍 Answer check…');
+  await sleep(3000);
+  hideDoneBanner();
+  document.body.classList.remove('review', 'player-done');
+
+  const myRank = ranking.find(r => r.key === vs.myId)?.rank || ranking.length;
+  showRoundResult(ranking, myRank, total);
+}
+
+function tieWith(a, b) {
+  return a.complete === b.complete && a.found === b.found && Math.abs(a.elapsed - b.elapsed) < 0.05;
+}
+
+async function showRoundResult(ranking, myRank, total) {
   const last = vs.roundIdx >= ROUNDS - 1;
-  renderMatchScore();
-  if (outcome === 1) { sfx.win(); vibrate([40, 60, 80]); }
-  else if (outcome === -1) sfx.lose();
+  if (myRank === 1) { sfx.win(); vibrate([40, 60, 80]); } else sfx.lose();
 
   $('#result-fail').style.display = 'none';
   $$('#result-stars span').forEach(s => s.classList.remove('on', 'pop'));
-  $('#result-title').textContent = outcome === 1 ? 'Round won! 🎉' : outcome === -1 ? 'Round lost' : 'Draw!';
-  $('#result-sub').textContent =
-    `You ${vs.myResult.found}/${vs.puzzles[vs.roundIdx].count} · ${vs.oppName} ${vs.oppResult.found}/${vs.puzzles[vs.roundIdx].count}   —   ${vs.myName} ${vs.score.me} : ${vs.score.opp} ${vs.oppName}`;
+  $('#result-title').textContent = myRank === 1 ? 'Round won! 🎉' : `${ordinal(myRank)} place`;
+  $('#result-sub').textContent = `Round ${vs.roundIdx + 1} of ${ROUNDS}`;
+  $('#result-list').innerHTML = ranking.map(r => `
+    <div class="rank-row${r.key === vs.myId ? ' me' : ''}">
+      <span class="rk">${r.rank}</span>
+      <span class="nm">${esc(r.name)}${r.key === vs.myId ? ' (you)' : ''}</span>
+      <span class="sc">${r.found}/${total}${r.complete ? ` · ${r.elapsed.toFixed(1)}s` : ''}</span>
+    </div>`).join('');
+  $('#result-list').style.display = '';
   $('#btn-next').style.display = 'none';
   $('#btn-result-home').style.display = 'none';
   $('#result').classList.add('on');
 
-  await sleep(3400);
+  await sleep(3600);
   $('#result').classList.remove('on');
+  $('#result-list').style.display = 'none';
   $('#btn-next').style.display = '';
   $('#btn-result-home').style.display = '';
+  if (!vs.active) return;
 
   if (!last) {
     vs.roundIdx++;
@@ -340,16 +455,31 @@ async function showRoundResult(outcome) {
 }
 
 function showMatchResult() {
-  const won = vs.score.me > vs.score.opp;
-  const draw = vs.score.me === vs.score.opp;
+  const participants = vs.roster.filter(p => !vs.leftKeys.has(p.key));
+  const board = participants.map(p => ({ ...p, ...vs.tally[p.key] }))
+    .sort((a, b) => (b.wins - a.wins) || (b.found - a.found) || (a.elapsed - b.elapsed));
+  board.forEach((r, i) => {
+    r.rank = (i > 0 && r.wins === board[i - 1].wins && r.found === board[i - 1].found) ? board[i - 1].rank : i + 1;
+  });
+  const me = board.find(r => r.key === vs.myId);
+  const won = me?.rank === 1;
   if (won) { confetti(); sfx.win(); }
+
+  const medals = ['🥇', '🥈', '🥉'];
   $('#result-fail').style.display = 'none';
   $$('#result-stars span').forEach((s, i) => {
     s.classList.remove('on', 'pop');
     if (won) setTimeout(() => s.classList.add('on', 'pop'), 250 + i * 220);
   });
-  $('#result-title').textContent = draw ? "It's a draw!" : won ? 'You win the match! 🏆' : `${vs.oppName} wins!`;
-  $('#result-sub').textContent = `Final score  ${vs.myName} ${vs.score.me} : ${vs.score.opp} ${vs.oppName}`;
+  $('#result-title').textContent = won ? 'You win the match! 🏆' : `${esc(board[0].name)} wins!`;
+  $('#result-sub').textContent = 'Final standings';
+  $('#result-list').innerHTML = board.map(r => `
+    <div class="rank-row${r.key === vs.myId ? ' me' : ''}">
+      <span class="rk">${medals[r.rank - 1] || r.rank}</span>
+      <span class="nm">${esc(r.name)}${r.key === vs.myId ? ' (you)' : ''}</span>
+      <span class="sc">${r.wins} win${r.wins === 1 ? '' : 's'} · ${r.found} found</span>
+    </div>`).join('');
+  $('#result-list').style.display = '';
   $('#btn-next').textContent = vs.isHost ? 'Rematch ↻' : 'Waiting for host…';
   $('#btn-next').disabled = !vs.isHost;
   $('#result').classList.add('on');
@@ -357,20 +487,22 @@ function showMatchResult() {
 }
 
 export async function nextAction() {
-  // called by main.js when #btn-next is pressed while versus is active
   if (vs.matchOver && vs.isHost) {
     vs.matchOver = false;
     $('#result').classList.remove('on');
+    $('#result-list').style.display = 'none';
     $('#btn-next').disabled = false;
     await hostStart();
   }
 }
 
+/* ---------- exits ---------- */
 function endMatchAbrupt(msg) {
   clearTimers();
   vs.round?.destroy(); vs.round = null;
   vs.active = false; vs.inRound = false;
-  document.body.classList.remove('versus');
+  document.body.classList.remove('versus', 'player-done', 'review');
+  hideDoneBanner();
   $('#result').classList.remove('on');
   alert(msg);
   leave();
@@ -380,9 +512,10 @@ export async function leave() {
   clearTimers();
   vs.round?.destroy(); vs.round = null;
   vs.active = false; vs.inRound = false; vs.matchOver = false;
-  vs.oppHere = false;
-  document.body.classList.remove('versus');
+  document.body.classList.remove('versus', 'player-done', 'review');
+  hideDoneBanner();
   $('#result').classList.remove('on');
+  $('#result-list').style.display = 'none';
   $('#btn-next').disabled = false;
   $('#btn-next').style.display = '';
   $('#btn-result-home').style.display = '';
@@ -395,15 +528,36 @@ function renderDots(found, total) {
   $('#found-dots').innerHTML = Array.from({ length: total }, (_, i) =>
     `<span class="dot${i < found ? ' on' : ''}"></span>`).join('');
 }
-function renderOpp(found, total) {
-  $('#opp-name').textContent = vs.oppName || 'Friend';
-  $('#opp-count').textContent = `${found}/${total}`;
-  $('#opp-dots').innerHTML = Array.from({ length: total }, (_, i) =>
-    `<span class="dot opp${i < found ? ' on' : ''}"></span>`).join('');
+
+function renderOppList() {
+  const total = vs.puzzles[vs.roundIdx]?.count || 0;
+  $('#opp-list').innerHTML = activeOpponents().map(p => {
+    const icon = p.status === 'done' ? '✓' : p.status === 'timeout' ? '⏱' : '';
+    return `<span class="opp-pill${p.status === 'done' ? ' finished' : ''}">
+      ${esc(p.name)} <b>${p.progress || 0}/${total}</b>${icon ? ` ${icon}` : ''}</span>`;
+  }).join('');
 }
-function renderMatchScore() {
-  $('#vs-scoreline').textContent = `${vs.score.me} : ${vs.score.opp}`;
+
+function renderScoreline() {
+  const opp = activeOpponents();
+  if (vs.roster.length === 2 && opp.length === 1) {
+    $('#vs-scoreline').textContent = `${vs.tally[vs.myId]?.wins ?? 0} : ${vs.tally[opp[0].key]?.wins ?? 0}`;
+  } else {
+    $('#vs-scoreline').textContent = `★ ${vs.tally[vs.myId]?.wins ?? 0}`;
+  }
 }
+
+function showDoneBanner(text) {
+  let b = $('#done-banner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'done-banner';
+    $('#screen-game').appendChild(b);
+  }
+  b.textContent = text;
+  b.classList.add('on');
+}
+function hideDoneBanner() { $('#done-banner')?.classList.remove('on'); }
 
 /* ---------- bindings ---------- */
 export function bind() {
