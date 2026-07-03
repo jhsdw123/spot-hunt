@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Spot Hunt — Spot the Difference Game</title>
+<meta name="description" content="Find the differences before time runs out! Hundreds of beautiful cartoon and photo puzzles. Free to play, no signup.">
+<meta name="theme-color" content="#101223">
+<meta property="og:title" content="Spot Hunt — Spot the Difference Game">
+<meta property="og:description" content="Find the differences before time runs out! Free browser game with hundreds of puzzles.">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spot Hunt">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+
+<!-- ============ HOME ============ -->
+<div class="screen active" id="screen-home">
+  <div class="glow"></div>
+  <header class="home-top safe-top">
+    <button class="icon-btn" id="btn-install" style="display:none">⬇ Install</button>
+    <span style="flex:1"></span>
+    <button class="icon-btn" id="btn-mute">🔊</button>
+  </header>
+
+  <main class="home-hero">
+    <div class="logo-mark">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ff5a5f"/><stop offset="1" stop-color="#ffb03a"/>
+          </linearGradient>
+        </defs>
+        <circle cx="42" cy="42" r="27" fill="none" stroke="url(#lg)" stroke-width="11"/>
+        <path d="M63 63 L86 86" stroke="url(#lg)" stroke-width="13" stroke-linecap="round"/>
+        <path d="M34 40 Q42 30 52 36" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+      </svg>
+    </div>
+    <h1 class="wordmark">Spot<em>Hunt</em></h1>
+    <p class="tagline">Find the differences. Beat the clock.</p>
+
+    <div class="chips">
+      <button class="chip" data-mode="toon">🖍️ Cartoon</button>
+      <button class="chip" data-mode="photo">📷 Photo</button>
+      <button class="chip" data-mode="mixed">🎲 Mixed</button>
+    </div>
+
+    <button class="play-btn" id="btn-play">
+      <span class="play-main">PLAY</span>
+      <span class="play-sub"><span id="home-level">Level 1</span> · <span id="home-pool">…</span></span>
+    </button>
+
+    <div class="stats-row">
+      <div class="stat"><b id="stat-solved">0</b><span>solved</span></div>
+      <div class="stat"><b id="stat-found">0</b><span>diffs found</span></div>
+      <div class="stat"><b id="stat-stars">0</b><span>perfect ★</span></div>
+    </div>
+
+    <div class="home-foot">
+      <button class="ghost-btn" id="btn-share">📤 Challenge a friend</button>
+      <button class="ghost-btn soon" disabled>⚔️ Versus mode — coming soon</button>
+    </div>
+  </main>
+</div>
+
+<!-- ============ GAME ============ -->
+<div class="screen" id="screen-game">
+  <header class="hud safe-top">
+    <button class="icon-btn" id="btn-back">←</button>
+    <div class="hud-mid">
+      <span id="game-level">Level 1</span>
+      <span class="timer-pill" id="timer-text">0:00</span>
+    </div>
+    <button class="icon-btn" id="btn-mute-game">🔊</button>
+  </header>
+  <div class="timer-track"><div id="timer-bar"></div></div>
+
+  <div class="found-row">
+    <span class="found-label" id="found-count">0/5</span>
+    <div id="found-dots"></div>
+  </div>
+
+  <div class="panels">
+    <div class="panel" id="panel-a">
+      <div class="inner" id="inner-a"><img id="img-a" draggable="false" alt="picture A"></div>
+    </div>
+    <div class="panel" id="panel-b">
+      <div class="inner" id="inner-b"><img id="img-b" draggable="false" alt="picture B"></div>
+    </div>
+  </div>
+
+  <footer class="actions safe-bottom">
+    <button class="action-btn" id="btn-hint">💡 Hint <b>×1</b></button>
+    <button class="action-btn zoom-only" id="btn-zoom-reset">↩ Reset zoom</button>
+  </footer>
+
+  <div id="veil"><div id="veil-num"></div></div>
+
+  <div id="result">
+    <div class="result-card">
+      <div id="result-fail" style="display:none" class="fail-ico">⏰</div>
+      <div id="result-stars"><span>★</span><span>★</span><span>★</span></div>
+      <h2 id="result-title">Great job!</h2>
+      <p id="result-sub"></p>
+      <button class="play-btn small" id="btn-next">Next puzzle →</button>
+      <button class="ghost-btn" id="btn-result-home">Home</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

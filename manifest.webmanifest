@@ -1,0 +1,16 @@
+{
+  "name": "Spot Hunt — Spot the Difference",
+  "short_name": "Spot Hunt",
+  "description": "Find the differences before time runs out! Hundreds of beautiful cartoon and photo puzzles.",
+  "start_url": "./?src=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101223",
+  "theme_color": "#101223",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
