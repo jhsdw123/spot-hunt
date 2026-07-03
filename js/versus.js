@@ -36,6 +36,7 @@ const vs = {
   active: false, inRound: false, matchOver: false,
   personalDone: false, hurryFired: false, _counting: false,
   readyTimer: null, resultTimer: null,
+  chatLog: [], unread: 0, chatOpen: false,
 };
 
 export function isActive() { return vs.active; }
@@ -65,6 +66,7 @@ function show(screen) {
 }
 function step(name) {
   $$('#screen-versus .vs-step').forEach(s => s.classList.toggle('on', s.dataset.step === name));
+  $('#screen-versus').classList.toggle('in-room', name !== 'entry');
 }
 function setStatus(text) { $('#vs-status').textContent = text; }
 
@@ -145,6 +147,7 @@ async function joinChannel() {
   ch.on('broadcast', { event: 'go' }, ({ payload }) => onGo(payload));
   ch.on('broadcast', { event: 'progress' }, ({ payload }) => onOppProgress(payload));
   ch.on('broadcast', { event: 'round_done' }, ({ payload }) => onOppRoundDone(payload));
+  ch.on('broadcast', { event: 'chat' }, ({ payload }) => onChat(payload));
 
   await new Promise((res, rej) => {
     const t = setTimeout(() => rej(new Error('connection timeout')), 8000);
@@ -159,6 +162,78 @@ async function joinChannel() {
 async function leaveChannel() {
   try { await vs.channel?.unsubscribe(); } catch {}
   vs.channel = null;
+  vs.chatLog = []; vs.unread = 0;
+  setChatOpen(false);
+  renderChat();
+}
+
+/* ---------- chat ---------- */
+function pushChat(m) {
+  vs.chatLog.push(m);
+  if (vs.chatLog.length > 60) vs.chatLog.shift();
+  renderChat();
+}
+
+function onChat({ from, name, text }) {
+  if (typeof text !== 'string' || !text.trim()) return;
+  const msg = { from, name: String(name || 'Player').slice(0, 12), text: String(text).slice(0, 120) };
+  pushChat(msg);
+  sfx.click();
+  const inGame = $('#screen-game').classList.contains('active');
+  if (inGame && !vs.chatOpen) {
+    vs.unread++;
+    renderChatBadge();
+    chatToast(msg);
+  }
+}
+
+function sendChat(inputEl) {
+  const text = inputEl.value.trim().slice(0, 120);
+  if (!text || !vs.channel) return;
+  inputEl.value = '';
+  const msg = { from: vs.myId, name: vs.myName, text };
+  pushChat(msg);
+  send('chat', { name: vs.myName, text });
+}
+
+function renderChat() {
+  const html = vs.chatLog.map(m => `
+    <div class="chat-m${m.from === vs.myId ? ' me' : ''}">
+      <span class="chat-name">${esc(m.name)}</span>
+      <span class="chat-text">${esc(m.text)}</span>
+    </div>`).join('');
+  for (const id of ['chat-msgs-lobby', 'chat-msgs-game']) {
+    const box = document.getElementById(id);
+    if (box) { box.innerHTML = html; box.scrollTop = box.scrollHeight; }
+  }
+}
+
+function renderChatBadge() {
+  const b = $('#chat-badge');
+  if (!b) return;
+  b.textContent = vs.unread > 9 ? '9+' : vs.unread;
+  b.classList.toggle('on', vs.unread > 0);
+}
+
+function setChatOpen(open) {
+  vs.chatOpen = open;
+  $('#chat-panel')?.classList.toggle('on', open);
+  if (open) {
+    vs.unread = 0;
+    renderChatBadge();
+    renderChat();
+  }
+}
+
+function chatToast(msg) {
+  const wrap = $('#chat-toasts');
+  if (!wrap) return;
+  const t = document.createElement('div');
+  t.className = 'chat-toast';
+  t.innerHTML = `<b>${esc(msg.name)}</b> ${esc(msg.text)}`;
+  wrap.appendChild(t);
+  while (wrap.children.length > 3) wrap.firstChild.remove();
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 350); }, 3200);
 }
 
 function renderLobby() {
@@ -573,4 +648,13 @@ export function bind() {
     $$('#vs-modes .chip').forEach(x => x.classList.toggle('active', x === c));
   }));
   $('#vs-code-input').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); });
+
+  // chat
+  $('#btn-chat').addEventListener('click', () => { sfx.click(); setChatOpen(!vs.chatOpen); });
+  $('#chat-close').addEventListener('click', () => setChatOpen(false));
+  for (const [inputId, btnId] of [['chat-input-lobby', 'chat-send-lobby'], ['chat-input-game', 'chat-send-game']]) {
+    const input = document.getElementById(inputId);
+    document.getElementById(btnId).addEventListener('click', () => sendChat(input));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendChat(input); } });
+  }
 }

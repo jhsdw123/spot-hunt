@@ -114,6 +114,14 @@
       <div class="vs-spinner"></div>
       <button class="ghost-btn" id="vs-leave-guest">Leave room</button>
     </div>
+
+    <div class="vs-chat-box">
+      <div class="chat-msgs" id="chat-msgs-lobby"></div>
+      <div class="chat-input-row">
+        <input id="chat-input-lobby" maxlength="120" placeholder="Say hi… 👋" autocomplete="off">
+        <button class="chat-send" id="chat-send-lobby">➤</button>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -147,8 +155,22 @@
 
   <footer class="actions safe-bottom">
     <button class="action-btn" id="btn-hint">💡 Hint <b>×1</b></button>
+    <button class="action-btn vs-only chat-btn" id="btn-chat">💬<span id="chat-badge"></span></button>
     <button class="action-btn zoom-only" id="btn-zoom-reset">↩ Reset zoom</button>
   </footer>
+
+  <div id="chat-toasts"></div>
+  <div id="chat-panel">
+    <div class="chat-head">
+      <span>💬 Chat</span>
+      <button class="icon-btn" id="chat-close">✕</button>
+    </div>
+    <div class="chat-msgs" id="chat-msgs-game"></div>
+    <div class="chat-input-row">
+      <input id="chat-input-game" maxlength="120" placeholder="Message…" autocomplete="off">
+      <button class="chat-send" id="chat-send-game">➤</button>
+    </div>
+  </div>
 
   <div id="veil"><div id="veil-num"></div></div>
 
