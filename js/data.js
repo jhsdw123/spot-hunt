@@ -31,6 +31,7 @@ function mulberry32(seed) {
 
 // Deterministic level order per mode so every player gets the same sequence.
 export function levelSequence(mode) {
+  if (!entries) return []; // library not loaded (offline / first fetch failed)
   const pool = entries.filter(e => mode === 'mixed' ? true : e.style === mode);
   const rng = mulberry32(0xC0FFEE);
   const order = pool.map((_, i) => i);

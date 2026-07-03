@@ -8,8 +8,10 @@ import * as versus from './versus.js';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
+const VALID_MODES = ['toon', 'photo', 'mixed'];
+const storedMode = localStorage.getItem('sh_mode');
 const state = {
-  mode: localStorage.getItem('sh_mode') || 'toon',
+  mode: VALID_MODES.includes(storedMode) ? storedMode : 'toon',
   sequence: [],
   round: null,
   puzzle: null,
@@ -40,6 +42,19 @@ function updateHome() {
 
 /* ---------- round flow ---------- */
 async function startLevel() {
+  // recover if the puzzle list wasn't loaded yet (flaky first fetch / offline start)
+  if (!state.sequence.length) {
+    try {
+      await loadPuzzles();
+      state.sequence = levelSequence(state.mode);
+    } catch {}
+    if (!state.sequence.length) {
+      $('#home-pool').textContent = 'no connection — retry in a moment';
+      show('home');
+      return;
+    }
+    updateHome();
+  }
   const lvl = getLevel() % state.sequence.length;
   state.puzzle = state.sequence[lvl];
   show('game');
