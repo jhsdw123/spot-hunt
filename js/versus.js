@@ -180,10 +180,9 @@ function onChat({ from, name, text }) {
   pushChat(msg);
   sfx.click();
   const inGame = $('#screen-game').classList.contains('active');
-  if (inGame && !vs.chatOpen) {
-    vs.unread++;
-    renderChatBadge();
-    chatToast(msg);
+  if (inGame) {
+    feedLine(msg);
+    if (!vs.chatOpen) { vs.unread++; renderChatBadge(); }
   }
 }
 
@@ -193,6 +192,7 @@ function sendChat(inputEl) {
   inputEl.value = '';
   const msg = { from: vs.myId, name: vs.myName, text };
   pushChat(msg);
+  if ($('#screen-game').classList.contains('active')) feedLine(msg);
   send('chat', { name: vs.myName, text });
 }
 
@@ -225,15 +225,16 @@ function setChatOpen(open) {
   }
 }
 
-function chatToast(msg) {
-  const wrap = $('#chat-toasts');
+// live chat feed overlaid bottom-left on the puzzle images
+function feedLine(msg) {
+  const wrap = $('#chat-feed');
   if (!wrap) return;
   const t = document.createElement('div');
-  t.className = 'chat-toast';
-  t.innerHTML = `<b>${esc(msg.name)}</b> ${esc(msg.text)}`;
+  t.className = 'feed-line' + (msg.from === vs.myId ? ' me' : '');
+  t.innerHTML = `<b>${esc(msg.name)}</b>${esc(msg.text)}`;
   wrap.appendChild(t);
-  while (wrap.children.length > 3) wrap.firstChild.remove();
-  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 350); }, 3200);
+  while (wrap.children.length > 4) wrap.firstChild.remove();
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 4800);
 }
 
 function renderLobby() {
