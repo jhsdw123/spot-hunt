@@ -35,17 +35,19 @@ const vs = {
   round: null,
   active: false, inRound: false, matchOver: false,
   personalDone: false, hurryFired: false, _counting: false,
-  readyTimer: null, resultTimer: null,
+  readyTimer: null, resultTimer: null, settleTimer: null,
   chatLog: [], unread: 0, chatOpen: false,
 };
 
 export function isActive() { return vs.active; }
 export function currentRound() { return vs.round; }
 export function __presence() { return vs.channel ? vs.channel.presenceState() : null; }
+export function __vs() { return vs; }
 
 function clearTimers() {
   clearInterval(vs.readyTimer); vs.readyTimer = null;
   clearInterval(vs.resultTimer); vs.resultTimer = null;
+  clearTimeout(vs.settleTimer); vs.settleTimer = null;
 }
 
 function client() {
@@ -311,6 +313,7 @@ async function beginRound() {
   const puzzle = vs.puzzles[vs.roundIdx];
   vs.results = {}; vs.readySet = new Set([vs.myId]);
   vs.inRound = true; vs.personalDone = false; vs.hurryFired = false; vs._counting = false;
+  vs.roster.forEach(p => { p.progress = 0; p.status = ''; });
   document.body.classList.remove('player-done', 'review');
 
   show('game');
@@ -341,7 +344,7 @@ async function beginRound() {
       // personal timeout: grey out, reveal answers, keep watching others
       myRoundDone({ complete: false, found: vs.round.found.size, elapsed: +vs.round.elapsed.toFixed(2) });
     },
-  });
+  }, { pauseOnHide: false });
   vs.round.resetZoom();
 
   // ready handshake (re-sent — broadcasts can be missed during round transitions)
@@ -429,6 +432,22 @@ function myRoundDone(result) {
     if (!vs.active || !vs.inRound) { clearInterval(vs.resultTimer); return; }
     doSend();
   }, 1500);
+
+  // hard deadline: when the round's max time is up, settle immediately even if
+  // someone's result never arrived (phone locked, connection died, walked away)
+  const remaining = Math.max(0, vs.round?.timeLeft ?? 0);
+  clearTimeout(vs.settleTimer);
+  vs.settleTimer = setTimeout(forceSettle, (remaining + 3) * 1000);
+
+  maybeSettle();
+}
+
+function forceSettle() {
+  if (!vs.inRound || !vs.results[vs.myId]) return;
+  for (const p of vs.roster) {
+    if (vs.leftKeys.has(p.key) || vs.results[p.key]) continue;
+    vs.results[p.key] = { complete: false, found: p.progress || 0, elapsed: vs.round?.totalTime ?? 999 };
+  }
   maybeSettle();
 }
 

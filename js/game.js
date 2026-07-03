@@ -4,10 +4,13 @@ import { sfx, vibrate } from './audio.js';
 const ZOOM_MAX = 4;
 
 export class Round {
-  constructor(puzzle, els, cb) {
+  constructor(puzzle, els, cb, opts = {}) {
     this.puzzle = puzzle;
     this.els = els;           // { panels: [elA, elB], inners: [a, b], timerBar, timerText, foundDots, hintBtn }
     this.cb = cb;             // { onProgress, onWin, onLose }
+    // solo: pause while the tab is hidden. versus: keep wall-clock time so one
+    // player backgrounding their phone can never freeze the match.
+    this.pauseOnHide = opts.pauseOnHide !== false;
     this.found = new Set();
     this.misses = 0;
     this.hintsUsed = 0;
@@ -24,7 +27,14 @@ export class Round {
     this._tickSec = -1;
     this._handlers = [];
     this._bindPanels();
-    this._onVis = () => { if (document.hidden) this._pause(); else this._resume(); };
+    this._onVis = () => {
+      if (!this.pauseOnHide) {
+        // rAF stops while hidden; on return the first frame's dt covers the whole
+        // hidden period, so real time is deducted automatically. Nothing to do.
+        return;
+      }
+      if (document.hidden) this._pause(); else this._resume();
+    };
     document.addEventListener('visibilitychange', this._onVis);
   }
 
