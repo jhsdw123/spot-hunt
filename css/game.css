@@ -106,6 +106,63 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .ghost-btn:active { transform: scale(0.97); }
 .ghost-btn.soon { opacity: 0.45; cursor: default; }
 
+/* ---------- versus lobby ---------- */
+.vs-wrap {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 20px 26px calc(30px + env(safe-area-inset-bottom));
+  max-width: 400px; margin: 0 auto; width: 100%;
+}
+.vs-step { display: none; width: 100%; flex-direction: column; align-items: center; gap: 13px; }
+.vs-step.on { display: flex; }
+.vs-label { color: var(--muted); font-size: 0.88rem; font-weight: 700; align-self: flex-start; }
+.vs-input {
+  width: 100%; padding: 13px 16px; border-radius: 15px;
+  background: var(--surface); border: 1.5px solid var(--line);
+  color: var(--text); font: inherit; font-weight: 700; font-size: 1rem;
+}
+.vs-input:focus { outline: none; border-color: #ff7a52; }
+.vs-input.code {
+  text-align: center; font-size: 1.5rem; letter-spacing: 8px; font-weight: 800;
+  text-transform: uppercase;
+}
+.vs-join-row { display: flex; gap: 10px; width: 100%; }
+.vs-join-row .vs-input { flex: 1; min-width: 0; }
+.vs-divider {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  color: var(--muted); font-size: 0.8rem; margin: 6px 0;
+}
+.vs-divider::before, .vs-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.vs-msg { color: var(--bad); font-size: 0.85rem; min-height: 1.2em; font-weight: 600; }
+.vs-code-big {
+  font-size: 3.4rem; font-weight: 800; letter-spacing: 14px; padding: 10px 10px 10px 24px;
+  background: var(--surface); border: 1.5px dashed #ff7a52; border-radius: 20px;
+  background-clip: padding-box;
+}
+.vs-status { color: var(--muted); font-size: 0.92rem; font-weight: 600; min-height: 1.3em; }
+.vs-spinner {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 3.5px solid var(--line); border-top-color: #ff7a52;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.play-btn.wide { width: 100%; }
+.play-btn:disabled { opacity: 0.4; pointer-events: none; }
+.vs-cta { border-color: rgba(255, 122, 82, 0.4); }
+
+/* versus in-game additions */
+.vs-only { display: none !important; }
+body.versus .vs-only { display: flex !important; }
+body.versus #btn-hint { display: none; }
+.opp-bar {
+  margin-left: auto; display: flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--line);
+  padding: 5px 11px; border-radius: 99px; font-size: 0.8rem; font-weight: 700;
+}
+.opp-bar #opp-name { color: var(--muted); max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opp-count { font-variant-numeric: tabular-nums; }
+#opp-dots { display: flex; gap: 4px; }
+.dot.opp.on { background: #ffb03a; box-shadow: 0 0 8px rgba(255, 176, 58, 0.7); }
+
 /* ---------- game hud ---------- */
 .hud { display: flex; align-items: center; gap: 10px; padding: 10px 12px 8px; }
 .hud-mid { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; }

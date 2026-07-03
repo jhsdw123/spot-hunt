@@ -62,7 +62,55 @@
 
     <div class="home-foot">
       <button class="ghost-btn" id="btn-share">📤 Challenge a friend</button>
-      <button class="ghost-btn soon" disabled>⚔️ Versus mode — coming soon</button>
+      <button class="ghost-btn vs-cta" id="btn-versus">⚔️ Versus — battle a friend</button>
+    </div>
+  </main>
+</div>
+
+<!-- ============ VERSUS LOBBY ============ -->
+<div class="screen" id="screen-versus">
+  <header class="hud safe-top">
+    <button class="icon-btn" id="vs-back">←</button>
+    <div class="hud-mid"><span style="font-weight:800">⚔️ Versus</span></div>
+    <span class="icon-btn" style="visibility:hidden"></span>
+  </header>
+
+  <main class="vs-wrap">
+    <div class="vs-step on" data-step="entry">
+      <label class="vs-label">Your nickname</label>
+      <input class="vs-input" id="vs-name" maxlength="12" placeholder="Player">
+      <button class="play-btn small wide" id="vs-create">Create a room</button>
+      <div class="vs-divider"><span>or join a friend</span></div>
+      <div class="vs-join-row">
+        <input class="vs-input code" id="vs-code-input" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
+        <button class="play-btn small" id="vs-join">Join</button>
+      </div>
+      <p class="vs-msg" id="vs-entry-msg"></p>
+    </div>
+
+    <div class="vs-step" data-step="host">
+      <p class="vs-label">Tell your friend to enter this code:</p>
+      <div class="vs-code-big" id="vs-code-big">····</div>
+      <p class="vs-status" id="vs-status">Waiting for your friend…</p>
+      <label class="vs-label">Puzzle style</label>
+      <div class="chips" id="vs-modes">
+        <button class="chip active" data-vs-mode="toon">🖍️ Cartoon</button>
+        <button class="chip" data-vs-mode="photo">📷 Photo</button>
+        <button class="chip" data-vs-mode="mixed">🎲 Mixed</button>
+      </div>
+      <button class="play-btn wide" id="vs-start" disabled>
+        <span class="play-main">START</span>
+        <span class="play-sub">best of 3 rounds</span>
+      </button>
+      <button class="ghost-btn" id="vs-leave-host">Cancel</button>
+    </div>
+
+    <div class="vs-step" data-step="guest">
+      <p class="vs-label">Joined room</p>
+      <div class="vs-code-big" id="vs-code-guest">····</div>
+      <p class="vs-status">Waiting for the host to start…</p>
+      <div class="vs-spinner"></div>
+      <button class="ghost-btn" id="vs-leave-guest">Leave room</button>
     </div>
   </main>
 </div>
@@ -73,6 +121,7 @@
     <button class="icon-btn" id="btn-back">←</button>
     <div class="hud-mid">
       <span id="game-level">Level 1</span>
+      <span class="timer-pill vs-only" id="vs-scoreline">0 : 0</span>
       <span class="timer-pill" id="timer-text">0:00</span>
     </div>
     <button class="icon-btn" id="btn-mute-game">🔊</button>
@@ -82,6 +131,11 @@
   <div class="found-row">
     <span class="found-label" id="found-count">0/5</span>
     <div id="found-dots"></div>
+    <div class="opp-bar vs-only">
+      <span id="opp-name">Friend</span>
+      <span class="opp-count" id="opp-count">0/5</span>
+      <div id="opp-dots"></div>
+    </div>
   </div>
 
   <div class="panels">
@@ -112,6 +166,7 @@
   </div>
 </div>
 
+<script src="vendor/supabase.js" defer></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

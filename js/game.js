@@ -48,6 +48,9 @@ export class Round {
     this._raf = requestAnimationFrame(loop);
   }
 
+  // freeze the round without firing win/lose callbacks (versus: opponent finished first)
+  halt() { this.finished = true; this.running = false; }
+
   _pause() { this.running = false; }
   _resume() { if (!this.destroyed && !this.finished) { this.running = true; this._lastTs = performance.now(); } }
 

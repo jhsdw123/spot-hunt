@@ -3,6 +3,7 @@ import { loadPuzzles, levelSequence, poolSize } from './data.js';
 import { Round } from './game.js';
 import { sfx, toggleMute, isMuted, vibrate } from './audio.js';
 import { confetti } from './confetti.js';
+import * as versus from './versus.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -133,6 +134,7 @@ function bind() {
 
   $('#btn-back').addEventListener('click', () => {
     sfx.click();
+    if (versus.isActive()) { versus.leave(); updateHome(); return; }
     state.round?.destroy(); state.round = null;
     closeResult();
     updateHome();
@@ -143,19 +145,30 @@ function bind() {
     if (state.round?.hint()) $('#btn-hint').classList.add('used');
   });
 
-  $('#btn-zoom-reset').addEventListener('click', () => { sfx.click(); state.round?.resetZoom(); });
+  $('#btn-zoom-reset').addEventListener('click', () => {
+    sfx.click();
+    (state.round || versus.currentRound())?.resetZoom();
+  });
 
   const muteBtns = ['#btn-mute', '#btn-mute-game'];
   const renderMute = () => muteBtns.forEach(sel => { const b = $(sel); if (b) b.textContent = isMuted() ? '🔇' : '🔊'; });
   muteBtns.forEach(sel => $(sel)?.addEventListener('click', () => { toggleMute(); renderMute(); }));
   renderMute();
 
-  $('#btn-next').addEventListener('click', () => { sfx.click(); closeResult(); startLevel(); });
+  $('#btn-next').addEventListener('click', () => {
+    sfx.click();
+    if (versus.isActive()) { versus.nextAction(); return; }
+    closeResult(); startLevel();
+  });
   $('#btn-result-home').addEventListener('click', () => {
-    sfx.click(); closeResult();
+    sfx.click();
+    if (versus.isActive()) { versus.leave(); updateHome(); return; }
+    closeResult();
     state.round?.destroy(); state.round = null;
     updateHome(); show('home');
   });
+
+  versus.bind();
 
   $('#btn-share')?.addEventListener('click', async () => {
     const text = `Spot Hunt 🔍 — I've solved ${state.stats.solved} puzzles! Can you beat me?`;
@@ -193,5 +206,5 @@ function bind() {
   show('home');
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   // expose for E2E tests
-  window.__sh = { state, startLevel };
+  window.__sh = { state, startLevel, versus };
 })();
