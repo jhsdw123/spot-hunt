@@ -57,6 +57,15 @@ export async function portalInit() {
   }
 }
 
+/* ---------- CrazyGames party / invite integration ---------- */
+export function inviteButton(params) { try { cg?.game.showInviteButton(params); } catch {} }
+export function hideInvite() { try { cg?.game.hideInviteButton(); } catch {} }
+export function inviteParam(key) { try { return cg?.game.getInviteParam(key) || null; } catch { return null; } }
+export function instantMultiplayer() { try { return !!cg?.game.isInstantMultiplayer; } catch { return false; } }
+export async function portalUsername() {
+  try { return (await cg?.user.getUser())?.username || null; } catch { return null; }
+}
+
 /* ---------- gameplay telemetry (CrazyGames cares; GD ignores) ---------- */
 export function loadingStart() { try { cg?.game.loadingStart(); } catch {} }
 export function loadingStop() { try { cg?.game.loadingStop(); } catch {} }

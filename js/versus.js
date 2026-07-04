@@ -6,8 +6,17 @@ import { Round } from './game.js';
 import { sfx, vibrate } from './audio.js';
 import { confetti } from './confetti.js';
 import { storeGet, storeSet } from './store.js';
-import { gameplayStart, gameplayStop, happytime } from './portal.js';
+import { gameplayStart, gameplayStop, happytime, inviteButton, hideInvite } from './portal.js';
 import { SUPABASE_URL, SUPABASE_ANON } from './config.js';
+
+// basic profanity filter — the mandatory minimum for chat on CrazyGames;
+// applied to chat text and player names (both outgoing and incoming)
+const PROFANITY = new RegExp('\\b(' + [
+  'fuck', 'fucking', 'fucker', 'motherfucker', 'shit', 'shitty', 'bitch', 'bitches',
+  'asshole', 'ass', 'cunt', 'dick', 'dicks', 'cock', 'pussy', 'whore', 'slut',
+  'bastard', 'nigger', 'nigga', 'faggot', 'fag', 'retard', 'retarded', 'kys',
+].join('|') + ')\\b', 'gi');
+const clean = s => String(s).replace(PROFANITY, m => '*'.repeat(m.length));
 
 const ROUNDS = 3;
 const MAX_PLAYERS = 8;
@@ -92,8 +101,28 @@ export function open() {
 }
 
 function saveName() {
-  vs.myName = ($('#vs-name').value.trim() || 'Player' + ((Math.random() * 90 + 10) | 0)).slice(0, 12);
+  vs.myName = clean(($('#vs-name').value.trim() || 'Player' + ((Math.random() * 90 + 10) | 0)).slice(0, 12));
   storeSet('sh_name', vs.myName);
+}
+
+// CrazyGames account username as the default nickname (friend recognition)
+export function presetName(name) {
+  if (vs.myName) return;
+  vs.myName = clean(String(name).slice(0, 12));
+  storeSet('sh_name', vs.myName);
+}
+
+// launched from an invite link: land straight in the friend's lobby
+export function autoJoin(code) {
+  open();
+  $('#vs-code-input').value = String(code).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  joinRoom().catch(e => setEntryMsg(e.message));
+}
+
+// launched via "play with friends" on the portal: host a joinable room now
+export function autoHost() {
+  open();
+  createRoom().catch(e => setEntryMsg(e.message));
 }
 
 function makeCode() {
@@ -109,6 +138,7 @@ async function createRoom() {
   $('#vs-start').disabled = true;
   setStatus('Waiting for players…');
   step('host');
+  inviteButton({ room: vs.code });
   renderLobby();
 }
 
@@ -138,6 +168,7 @@ async function joinRoom() {
   }
   $('#vs-code-guest').textContent = vs.code;
   step('guest');
+  inviteButton({ room: vs.code });
   syncGuestStatus();
   renderLobby();
 }
@@ -158,7 +189,7 @@ function playersInRoom() {
   const state = vs.channel?.presenceState() || {};
   return Object.entries(state).map(([key, metas]) => ({
     key,
-    name: metas[0]?.name || 'Player',
+    name: clean(metas[0]?.name || 'Player'),
     host: !!metas[0]?.host,
     playing: !!metas[0]?.playing,
   }));
@@ -190,6 +221,7 @@ async function joinChannel() {
 }
 
 async function leaveChannel() {
+  hideInvite();
   try { await vs.channel?.unsubscribe(); } catch {}
   vs.channel = null;
   vs.chatLog = []; vs.unread = 0;
@@ -206,7 +238,7 @@ function pushChat(m) {
 
 function onChat({ from, name, text }) {
   if (typeof text !== 'string' || !text.trim()) return;
-  const msg = { from, name: String(name || 'Player').slice(0, 12), text: String(text).slice(0, 120) };
+  const msg = { from, name: clean(String(name || 'Player').slice(0, 12)), text: clean(String(text).slice(0, 120)) };
   pushChat(msg);
   sfx.click();
   const inGame = $('#screen-game').classList.contains('active');
@@ -217,7 +249,7 @@ function onChat({ from, name, text }) {
 }
 
 function sendChat(inputEl) {
-  const text = inputEl.value.trim().slice(0, 120);
+  const text = clean(inputEl.value.trim().slice(0, 120));
   if (!text || !vs.channel) return;
   inputEl.value = '';
   const msg = { from: vs.myId, name: vs.myName, text };
@@ -455,6 +487,7 @@ async function onGo({ round }) {
   vs._counting = false;
   vs.round.start();
   gameplayStart();
+  hideInvite(); // room is racing now — invites reopen on the final scoreboard
 }
 
 /* ---------- during round ---------- */
@@ -650,6 +683,7 @@ function showMatchResult() {
   $('#result').classList.add('on');
   vs.matchOver = true;
   syncMatchOverButtons(); // players may already have left mid-match
+  inviteButton({ room: vs.code }); // room stays open — friends can join the rematch
 }
 
 export async function nextAction() {

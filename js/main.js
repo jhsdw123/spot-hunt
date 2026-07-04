@@ -302,6 +302,17 @@ function bind() {
   if ('serviceWorker' in navigator && !portal.inPortal) navigator.serviceWorker.register('sw.js').catch(() => {});
   // expose for E2E tests
   window.__sh = { state, startLevel, versus, portal };
+  // CrazyGames party flows take priority: an invite link lands straight in the
+  // friend's lobby; instant multiplayer hosts a joinable room immediately
+  const inviteRoom = portal.inviteParam('room');
+  if ((inviteRoom || portal.instantMultiplayer()) && state.sequence.length) {
+    tut.markSeen();
+    const cgName = await portal.portalUsername();
+    if (cgName) versus.presetName(cgName);
+    if (inviteRoom) versus.autoJoin(inviteRoom);
+    else versus.autoHost();
+    return;
+  }
   // first visit: portals require landing in gameplay immediately (≤1 click),
   // so there we skip straight into the guided tutorial puzzle; on the web,
   // walk through the buttons first, then offer it
