@@ -1,5 +1,6 @@
 // Round engine: synchronized dual-panel zoom/pan, tap hit-testing, timer, hints.
 import { sfx, vibrate } from './audio.js';
+import { confetti } from './confetti.js';
 
 const ZOOM_MAX = 4;
 
@@ -11,6 +12,8 @@ export class Round {
     // solo: pause while the tab is hidden. versus: keep wall-clock time so one
     // player backgrounding their phone can never freeze the match.
     this.pauseOnHide = opts.pauseOnHide !== false;
+    // how long the win celebration plays before the result callback fires
+    this.winDelay = opts.winDelay ?? 550;
     this.found = new Set();
     this.misses = 0;
     this.hintsUsed = 0;
@@ -53,7 +56,7 @@ export class Round {
     this._lastTs = performance.now();
     const loop = (ts) => {
       if (!this.destroyed) {
-        if (this.running) {
+        if (this.running && !this.frozen) {
           const dt = (ts - this._lastTs) / 1000;
           this.timeLeft -= dt;
           this.elapsed += dt;
@@ -69,6 +72,9 @@ export class Round {
 
   // freeze the round without firing win/lose callbacks (versus: opponent finished first)
   halt() { this.finished = true; this.running = false; }
+
+  // stop the clock while taps stay live (hint countdown, tutorial demos)
+  freezeTime(v) { this.frozen = !!v; }
 
   // show where the remaining answers were (timeout / review phase)
   revealAnswers() {
@@ -92,9 +98,11 @@ export class Round {
   destroy() {
     this.destroyed = true;
     cancelAnimationFrame(this._raf);
+    this._hintBox?.remove();
     document.removeEventListener('visibilitychange', this._onVis);
     for (const [el, type, fn] of this._handlers) el.removeEventListener(type, fn);
-    this.els.panels.forEach(p => p.querySelectorAll('.marker,.hint-ring,.miss-x,.reveal-ring,.blink-img').forEach(m => m.remove()));
+    this.els.panels.forEach(p => p.querySelectorAll('.marker,.hint-ring,.miss-x,.reveal-ring,.blink-img,.burst').forEach(m => m.remove()));
+    document.querySelectorAll('.congrats-banner').forEach(e => e.remove());
   }
 
   /* ---------- timer ---------- */
@@ -230,6 +238,7 @@ export class Round {
       m.textContent = this.found.size;
       inner.appendChild(m);
     });
+    this._burst(r.x, r.y);
     this.timeLeft = Math.min(this.totalTime, this.timeLeft + 4);
     sfx.found(); vibrate(30);
     this.cb.onProgress(this.found.size, this.puzzle.count);
@@ -253,37 +262,104 @@ export class Round {
     if (this.timeLeft <= 0) this._lose();
   }
 
-  // rewarded-ad refill: re-arm the single hint slot and fire it
-  rewardHint() {
+  // rewarded-ad refill: re-arm the single hint slot and fire it — if a hint
+  // sequence is still playing, queue behind it instead of being swallowed
+  async rewardHint() {
+    while (this._hinting) {
+      if (this.destroyed || this.finished) return false;
+      await new Promise(r => setTimeout(r, 150));
+    }
     this.hintsUsed = 0;
     return this.hint();
   }
 
-  // blink-comparator hint: flash the other picture on top of each panel for
-  // ~0.6s — the differences flicker while everything else stays still
+  // blink-comparator hint: the clock freezes, a 3·2·1 "watch closely" countdown
+  // primes the player, then the two pictures strobe A·B·A·B for 1.5s — the
+  // differences flicker while everything else stays still. Once per game.
   hint() {
-    if (this.hintsUsed >= 1 || this.finished || !this.running) return false;
+    if (this.hintsUsed >= 1 || this.finished || !this.running || this._hinting) return false;
     if (this.found.size >= this.puzzle.count) return false;
     this.hintsUsed++;
-    sfx.hint();
-    this._blinks.forEach(b => {
-      b.classList.remove('on'); void b.offsetWidth;
-      b.classList.add('on');
-      setTimeout(() => b.classList.remove('on'), 700);
-    });
+    this._runHint();
     return true;
+  }
+
+  async _runHint() {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    this._hinting = true;
+    this.freezeTime(true);
+    const box = this._hintBox = document.createElement('div');
+    box.className = 'hint-count';
+    const num = document.createElement('b');
+    const label = document.createElement('span');
+    label.textContent = '👀 Hint incoming — watch closely!';
+    box.append(num, label);
+    document.body.appendChild(box);
+    for (const n of [3, 2, 1]) {
+      if (this.destroyed || this.finished) break;
+      num.textContent = n;
+      num.classList.remove('pop'); void num.offsetWidth;
+      num.classList.add('pop');
+      sfx.tick();
+      await wait(700);
+    }
+    box.remove();
+    this._hintBox = null;
+    if (!this.destroyed && !this.finished) {
+      sfx.hint();
+      this._blinks.forEach(b => b.classList.add('strobe'));
+      await wait(1500);
+      this._blinks.forEach(b => b.classList.remove('strobe'));
+    }
+    this.freezeTime(false);
+    this._hinting = false;
+  }
+
+  // star sparkles radiating from a point, mirrored on both panels
+  _burst(cx, cy, big = false) {
+    this.els.inners.forEach(inner => {
+      const wrap = document.createElement('div');
+      wrap.className = 'burst';
+      wrap.style.left = `${cx}%`; wrap.style.top = `${cy}%`;
+      const n = big ? 9 : 7;
+      for (let i = 0; i < n; i++) {
+        const s = document.createElement('span');
+        s.textContent = ['✨', '⭐', '💫'][i % 3];
+        const ang = (Math.PI * 2 * i) / n + Math.random() * 0.7;
+        const dist = (big ? 52 : 36) + Math.random() * 20;
+        s.style.setProperty('--dx', `${Math.cos(ang) * dist}px`);
+        s.style.setProperty('--dy', `${Math.sin(ang) * dist}px`);
+        s.style.animationDelay = `${(Math.random() * 90) | 0}ms`;
+        wrap.appendChild(s);
+      }
+      inner.appendChild(wrap);
+      setTimeout(() => wrap.remove(), 1000);
+    });
+  }
+
+  // all found: Congratulations! + sparkles on every answer + confetti rain
+  _celebrate() {
+    const banner = document.createElement('div');
+    banner.className = 'congrats-banner';
+    banner.textContent = '🎉 Congratulations!';
+    (document.querySelector('#screen-game') || document.body).appendChild(banner);
+    setTimeout(() => banner.remove(), 2100);
+    this.puzzle.regions.forEach((r, i) =>
+      setTimeout(() => { if (!this.destroyed) this._burst(r.x, r.y, true); }, 90 + i * 130));
+    confetti(2400, 'rain');
   }
 
   _win() {
     this.finished = true; this.running = false;
     sfx.win(); vibrate([40, 60, 40, 60, 120]);
+    this._celebrate();
     const stars = (this.misses === 0 && this.hintsUsed === 0) ? 3 : (this.misses <= 2 ? 2 : 1);
     setTimeout(() => this.cb.onWin({
       stars,
       misses: this.misses,
       hintsUsed: this.hintsUsed,
       timeUsed: Math.max(1, Math.round(this.elapsed)),
-    }), 550);
+    }), this.winDelay);
   }
 
   _lose() {

@@ -408,12 +408,54 @@ body.player-done .panel { border-color: rgba(255, 255, 255, 0.05); }
 
 .miss-x {
   position: absolute; transform: translate(-50%, -50%);
-  color: var(--bad); font-weight: 800; font-size: 1.5rem;
+  color: var(--bad); font-weight: 800; font-size: 1.6rem;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-  animation: miss-fade .7s forwards;
+  animation: miss-shake .55s cubic-bezier(.3, .1, .3, 1) forwards;
   pointer-events: none;
 }
-@keyframes miss-fade { 0% { opacity: 1; scale: 1.3; } 100% { opacity: 0; scale: 0.8; } }
+/* wrong! — the X rattles hard, then fades */
+@keyframes miss-shake {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(1.5) rotate(0deg); }
+  12% { transform: translate(calc(-50% - 7px), -50%) scale(1.35) rotate(-14deg); }
+  24% { transform: translate(calc(-50% + 7px), -50%) scale(1.3) rotate(13deg); }
+  36% { transform: translate(calc(-50% - 6px), -50%) scale(1.25) rotate(-10deg); }
+  48% { transform: translate(calc(-50% + 5px), -50%) scale(1.2) rotate(8deg); }
+  60% { transform: translate(calc(-50% - 3px), -50%) scale(1.15) rotate(-5deg); }
+  72% { transform: translate(calc(-50% + 2px), -50%) scale(1.1) rotate(3deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.85) rotate(0deg); }
+}
+
+/* correct! — star sparkles fly out from the tap point */
+.burst { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 5; }
+.burst span {
+  position: absolute; left: 0; top: 0; font-size: 15px; opacity: 0;
+  animation: burst-fly 0.8s cubic-bezier(.15, .8, .3, 1) forwards;
+}
+@keyframes burst-fly {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); }
+  65% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.2) rotate(150deg); }
+}
+
+/* all found: Congratulations! */
+.congrats-banner {
+  position: absolute; left: 50%; top: 32%;
+  transform: translate(-50%, -50%);
+  z-index: 32; pointer-events: none; white-space: nowrap;
+  font-size: clamp(1.7rem, 8.5vw, 2.7rem); font-weight: 900; letter-spacing: 0.5px;
+  background: linear-gradient(92deg, #ff5a5f, #ffb03a 45%, #34d399);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 6px 22px rgba(0, 0, 0, 0.55));
+  animation: congrats-pop 0.55s cubic-bezier(.2, 1.7, .4, 1), congrats-out 0.4s ease 1.6s forwards;
+}
+@keyframes congrats-pop {
+  0% { transform: translate(-50%, -50%) scale(0.2) rotate(-5deg); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes congrats-out {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+}
 
 /* ---------- onboarding tour ---------- */
 #tour { position: fixed; inset: 0; z-index: 80; }
@@ -444,16 +486,48 @@ body.player-done .panel { border-color: rgba(255, 255, 255, 0.05); }
 .tour-btns { display: flex; gap: 12px; align-items: center; }
 .tour-btns .play-btn.small { padding: 10px 22px; }
 
-/* blink-comparator hint: the other picture strobes on top (파바박) */
+/* blink-comparator hint: the other picture strobes on top, A·B·A·B (파바박) */
 .blink-img {
   position: absolute; left: 0; top: 0; width: 100%; height: 100%;
   opacity: 0; pointer-events: none; z-index: 3;
 }
-.blink-img.on { animation: blink-hint 0.62s linear; }
-@keyframes blink-hint {
-  0%, 21%, 45%, 69%, 100% { opacity: 0; }
-  10%, 33%, 57% { opacity: 1; }
+.blink-img.strobe { animation: blink-strobe 1.5s steps(1, end); }
+@keyframes blink-strobe {
+  0%, 20%, 40%, 60%, 80% { opacity: 1; }
+  10%, 30%, 50%, 70%, 90%, 100% { opacity: 0; }
 }
+
+/* hint pre-roll: frozen clock + focus countdown */
+.hint-count {
+  position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%);
+  z-index: 30; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.hint-count b {
+  font-size: 4.4rem; font-weight: 900; color: #ffb03a; line-height: 1;
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.65);
+}
+.hint-count b.pop { animation: hintnum-pop 0.5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes hintnum-pop { 0% { transform: scale(0.3); opacity: 0.3; } 100% { transform: scale(1); opacity: 1; } }
+.hint-count span {
+  background: rgba(16, 18, 35, 0.88); border: 1px solid var(--line);
+  padding: 8px 15px; border-radius: 99px; font-weight: 700; font-size: 0.88rem;
+}
+
+/* tutorial: answer spotlight mask + coaching tip bar */
+.tut-mask { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
+.tut-mask .tut-ring { stroke: #ffb03a; stroke-width: 1.4; animation: tut-ring-pulse 1.1s ease-in-out infinite; }
+@keyframes tut-ring-pulse { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.4; } }
+#tut-tip {
+  position: absolute; left: 50%; bottom: calc(64px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(14px);
+  width: min(370px, 93vw);
+  background: var(--surface); border: 1px solid rgba(255, 176, 58, 0.55); border-radius: 16px;
+  padding: 12px 16px; text-align: center; font-size: 0.93rem; line-height: 1.45;
+  z-index: 27; opacity: 0; transition: all 0.3s; pointer-events: none;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
+}
+#tut-tip.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 .hint-ring {
   position: absolute; transform: translate(-50%, -50%);

@@ -2,7 +2,6 @@
 import { loadPuzzles, levelSequence, poolSize } from './data.js';
 import { Round } from './game.js';
 import { sfx, toggleMute, isMuted, vibrate } from './audio.js';
-import { confetti } from './confetti.js';
 import { storeGet, storeSet } from './store.js';
 import * as versus from './versus.js';
 import * as portal from './portal.js';
@@ -60,6 +59,11 @@ async function startLevel(opts = {}) {
   }
   const lvl = getLevel() % state.sequence.length;
   state.puzzle = state.sequence[lvl];
+  if (opts.tutorial) {
+    // the tutorial always teaches on the same clean, unambiguous pair
+    const all = await loadPuzzles().catch(() => null);
+    state.puzzle = all?.find(e => e.id === tut.TUTORIAL_ID) || state.puzzle;
+  }
   show('game');
   $('#game-level').textContent = `Level ${lvl + 1}`;
   renderFound(0, state.puzzle.count);
@@ -92,7 +96,7 @@ async function startLevel(opts = {}) {
     inners: [$('#inner-a'), $('#inner-b')],
     timerBar: $('#timer-bar'),
     timerText: $('#timer-text'),
-  }, { onProgress, onWin, onLose });
+  }, { onProgress, onWin, onLose }, { winDelay: 1600 }); // let the celebration play out
   state.round.resetZoom();
 
   // 3-2-1 countdown, then reveal
@@ -147,7 +151,6 @@ function onWin({ stars, misses, timeUsed }) {
   if (stars === 3) state.stats.stars3++;
   saveStats();
   setLevel(getLevel() + 1);
-  confetti();
   $('#result-title').textContent = ['Nice!', 'Great job!', 'Perfect!'][stars - 1];
   $('#result-sub').textContent = `${state.puzzle.count} differences · ${timeUsed}s · ${misses} miss${misses === 1 ? '' : 'es'}`;
   $$('#result-stars span').forEach((s, i) => {

@@ -88,46 +88,125 @@ export async function homeTour() {
 }
 
 /* ---------- guided first puzzle ---------- */
-let flags = null;
+// fixed pair: clean-lined playground cartoon with 5 unambiguous differences
+export const TUTORIAL_ID = 'toon_mr4pj0f6_0';
+
+let t = null; // { step, hintShown, idleTimer }
 
 export function roundBegin(round) {
-  flags = { first: false, hint: false };
-  // wait for the countdown to finish, then hold the round for the intro
+  t = { step: 'wait', hintShown: false, idleTimer: null };
+  // wait for the 3-2-1 countdown to finish, then freeze the clock and teach
   const iv = setInterval(() => {
     if (round.destroyed) { clearInterval(iv); return; }
     if (!round.running) return;
     clearInterval(iv);
-    pauseFor(round, {
-      targets: [$('.panels')],
-      html: `Find all <b>${round.puzzle.count} differences</b> between the two pictures — tap them in <b>either</b> picture! 🔍<br><span class="dim">Pinch or scroll to zoom in.</span>`,
-      next: `Let's go!`,
-    });
+    round.freezeTime(true);
+    t.step = 'demo';
+    showTip(`Let's find all <b>${round.puzzle.count} differences</b>! They look like this — <b>tap the circled spot</b> in either picture 👆`);
+    maskRegion(round, nextUnfound(round));
   }, 120);
 }
 
 export function roundProgress(round, found, total) {
-  if (!flags || round.finished) return;
-  if (found === 1 && !flags.first) {
-    flags.first = true;
-    pauseFor(round, {
-      targets: [$('#timer-text')],
-      html: `Nice one! ✅ Every find adds <b>+4s</b> to the clock. Careless taps cost <b>−6s</b> — aim well!`,
-      next: 'Got it',
-    });
-  } else if (found === total - 1 && !flags.hint) {
-    flags.hint = true;
-    pauseFor(round, {
-      targets: [$('#btn-hint')],
-      html: `One to go! Stuck? Tap <b>💡</b> — both pictures flash on top of each other for a moment, so the difference <i>pops</i>. <b>You get one per game!</b>`,
-      next: 'Got it',
-    });
+  if (!t || round.finished) return;
+  if (t.step === 'demo' && found < 2) {
+    // first find: celebrate, then point at the second answer
+    showTip(`Perfect! 🎉 That's a difference. Here's one more — <b>tap it!</b>`);
+    maskRegion(round, nextUnfound(round));
+  } else if (t.step === 'demo') {
+    clearMask();
+    hideTip();
+    t.step = 'progress';
+    (async () => {
+      await coach({
+        targets: [$('#found-count'), $('#found-dots')],
+        html: `Your progress lives up here — <b>${found} of ${total}</b> found. Fill every dot to win! ✅`,
+        next: 'Got it',
+      });
+      if (round.destroyed || round.finished) return;
+      t.step = 'free';
+      round.freezeTime(false);
+      showTip(`Now find the last <b>${total - found}</b> on your own! Every find adds <b>+4s</b> — misses cost <b>−6s</b>. 🔍 Pinch or scroll to zoom.`, 5000);
+      armIdleHint(round);
+    })();
+  } else if (t.step === 'free') {
+    armIdleHint(round); // finding something resets the "stuck" timer
+    if (found === total - 1) hintLesson(round);
   }
 }
 
-export function roundEnd() { flags = null; }
+export function roundEnd() {
+  clearTimeout(t?.idleTimer);
+  t = null;
+  hideTip();
+  clearMask();
+}
 
-async function pauseFor(round, step) {
+// teach the hint when they're stuck (12s without a find) or one from the end
+function armIdleHint(round) {
+  if (!t) return;
+  clearTimeout(t.idleTimer);
+  if (t.hintShown) return;
+  t.idleTimer = setTimeout(() => hintLesson(round), 12000);
+}
+
+async function hintLesson(round) {
+  if (!t || t.hintShown || round.finished) return;
+  t.hintShown = true;
+  clearTimeout(t.idleTimer);
   round._pause();
-  await coach(step);
+  await coach({
+    targets: [$('#btn-hint')],
+    html: `Can't spot one? Tap <b>💡</b> — the clock freezes, you get a <b>3·2·1</b> heads-up, then the two pictures flash <b>A·B·A·B</b> super fast so the difference jumps right out. <b>Once per game!</b>`,
+    next: 'Got it',
+  });
   if (!round.destroyed && !round.finished) round._resume();
 }
+
+/* ---- tutorial visuals: answer mask + tip bar ---- */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function nextUnfound(round) {
+  return round.puzzle.regions.findIndex((_, i) => !round.found.has(i));
+}
+
+// grey out everything except a pulsing ring around the answer, in both panels
+function maskRegion(round, idx) {
+  const r = round.puzzle.regions[idx];
+  if (!r) return;
+  const rad = Math.max(r.radius, 4.5) * 1.6;
+  round.els.inners.forEach(inner => {
+    let svg = inner.querySelector('.tut-mask');
+    if (!svg) {
+      svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('class', 'tut-mask');
+      svg.setAttribute('viewBox', '0 0 100 100');
+      svg.setAttribute('preserveAspectRatio', 'none');
+      inner.appendChild(svg);
+    }
+    svg.innerHTML = `
+      <path fill="rgba(5,6,15,0.62)" fill-rule="evenodd"
+        d="M0 0 H100 V100 H0 Z M${r.x - rad} ${r.y} a${rad} ${rad} 0 1 0 ${rad * 2} 0 a${rad} ${rad} 0 1 0 ${-rad * 2} 0"/>
+      <circle class="tut-ring" cx="${r.x}" cy="${r.y}" r="${rad}" fill="none"/>`;
+  });
+}
+
+function clearMask() {
+  document.querySelectorAll('.tut-mask').forEach(m => m.remove());
+}
+
+let tipTimer = null;
+function showTip(html, autoHide = 0) {
+  let el = $('#tut-tip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'tut-tip';
+    $('#screen-game').appendChild(el);
+  }
+  el.innerHTML = html;
+  el.classList.add('on');
+  clearTimeout(tipTimer);
+  if (autoHide) tipTimer = setTimeout(hideTip, autoHide);
+}
+
+function hideTip() { $('#tut-tip')?.classList.remove('on'); }
