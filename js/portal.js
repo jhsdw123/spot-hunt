@@ -135,8 +135,8 @@ export async function rewardedAd() {
     return ok;
   }
   try {
+    adStart(); // freeze immediately — rewarded preload can take many seconds
     await window.gdsdk.preloadAd('rewarded');
-    adStart();
     await window.gdsdk.showAd('rewarded');
     lastAdAt = Date.now();
     return true;

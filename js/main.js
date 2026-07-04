@@ -117,12 +117,12 @@ function renderFound(found, total) {
   $('#found-count').innerHTML = `<b>${found}</b><i>/${total}</i>`;
 }
 
-// hint button states: ready (free hint) / ad (watch a rewarded ad for one more) / used
+// hint button states: ready (free) / ad (rewarded refill) / wait (ad loading) / used
 function renderHintBtn(mode) {
   const b = $('#btn-hint');
-  b.classList.toggle('used', mode === 'used');
+  b.classList.toggle('used', mode === 'used' || mode === 'wait');
   b.classList.toggle('ad', mode === 'ad');
-  b.innerHTML = mode === 'ad' ? 'HINT<b>AD</b>' : 'HINT<b>1</b>';
+  b.innerHTML = mode === 'ad' ? 'HINT<b>AD</b>' : mode === 'wait' ? 'HINT<b>…</b>' : 'HINT<b>1</b>';
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -211,7 +211,7 @@ function bind() {
     const b = $('#btn-hint');
     if (b.classList.contains('ad')) {
       // rewarded refill: one ad buys one more hint, repeatable while playing
-      renderHintBtn('used');
+      renderHintBtn('wait'); // rewarded preload can take seconds — show it
       const granted = await portal.rewardedAd();
       if (granted) {
         state.round?.rewardHint();
