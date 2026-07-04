@@ -2,7 +2,7 @@
 // The public web build never sets window.SH_PORTAL, so everything here no-ops;
 // portal ZIPs (tools/build-portal.mjs) stamp the global into index.html.
 // A ?portal=crazygames|gd query works too, for local testing.
-import { setDucked } from './audio.js';
+import { setDucked, setPlatformMuted } from './audio.js';
 
 const qs = new URLSearchParams(location.search);
 export const PORTAL = window.SH_PORTAL || qs.get('portal') || '';
@@ -39,6 +39,11 @@ export async function portalInit() {
       const sdk = window.CrazyGames?.SDK;
       await sdk.init();
       if (sdk.environment !== 'disabled') cg = sdk;
+      // the site-level mute button must override in-game audio settings
+      if (cg) {
+        setPlatformMuted(!!cg.game.settings?.muteAudio);
+        cg.game.addSettingsChangeListener?.(s => setPlatformMuted(!!s?.muteAudio));
+      }
     } catch { cg = null; }
   } else if (PORTAL === 'gd') {
     window.GD_OPTIONS = {

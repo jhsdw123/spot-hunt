@@ -4,6 +4,7 @@ import { storeGet, storeSet } from './store.js';
 let ctx = null;
 let muted = storeGet('sh_muted') === '1';
 let ducked = false; // temporary silence while a portal ad plays (doesn't touch the user's mute)
+let platformMuted = false; // the portal's own mute button — overrides in-game audio settings
 
 function ac() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -12,7 +13,7 @@ function ac() {
 }
 
 function tone(freq, dur, { type = 'sine', gain = 0.12, when = 0, slide = 0 } = {}) {
-  if (muted || ducked) return;
+  if (muted || ducked || platformMuted) return;
   const c = ac();
   const t0 = c.currentTime + when;
   const o = c.createOscillator();
@@ -50,4 +51,5 @@ export function toggleMute() {
 }
 export function isMuted() { return muted; }
 export function setDucked(v) { ducked = !!v; }
+export function setPlatformMuted(v) { platformMuted = !!v; }
 export function vibrate(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); }
