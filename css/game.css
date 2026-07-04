@@ -343,6 +343,7 @@ body.player-done .panel { border-color: rgba(255, 255, 255, 0.05); }
 .strip-btn:active { transform: scale(0.92); }
 .strip-btn b { color: #ffb03a; font-size: 0.62rem; margin-left: 2px; }
 .strip-btn.used { opacity: 0.35; pointer-events: none; }
+.strip-btn.ad { border-color: #ffb03a; box-shadow: 0 0 10px rgba(255, 176, 58, 0.35); }
 #found-dots { display: flex; gap: 5px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); transition: all .25s; }
 .dot.on { background: var(--good); box-shadow: 0 0 8px rgba(52, 211, 153, 0.7); transform: scale(1.15); }

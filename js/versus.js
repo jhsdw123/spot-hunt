@@ -5,6 +5,8 @@ import { loadPuzzles } from './data.js';
 import { Round } from './game.js';
 import { sfx, vibrate } from './audio.js';
 import { confetti } from './confetti.js';
+import { storeGet, storeSet } from './store.js';
+import { gameplayStart, gameplayStop, happytime } from './portal.js';
 import { SUPABASE_URL, SUPABASE_ANON } from './config.js';
 
 const ROUNDS = 3;
@@ -30,7 +32,7 @@ const ordinal = n => n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}
 const vs = {
   sb: null, channel: null, code: '', isHost: false,
   myId: Math.random().toString(36).slice(2, 10),
-  myName: localStorage.getItem('sh_name') || '',
+  myName: storeGet('sh_name') || '',
   style: 'toon',
   hostKey: '',           // presence key of the match host (from start_match)
   raceBanner: '',        // "X found them all!" — kept visible through answer check
@@ -91,7 +93,7 @@ export function open() {
 
 function saveName() {
   vs.myName = ($('#vs-name').value.trim() || 'Player' + ((Math.random() * 90 + 10) | 0)).slice(0, 12);
-  localStorage.setItem('sh_name', vs.myName);
+  storeSet('sh_name', vs.myName);
 }
 
 function makeCode() {
@@ -452,6 +454,7 @@ async function onGo({ round }) {
   $('#veil').classList.remove('on');
   vs._counting = false;
   vs.round.start();
+  gameplayStart();
 }
 
 /* ---------- during round ---------- */
@@ -547,6 +550,7 @@ function maybeSettle() {
 }
 
 async function settle(participants) {
+  gameplayStop();
   const total = vs.puzzles[vs.roundIdx].count;
   const ranking = participants.map(p => ({ ...p, ...vs.results[p.key] }))
     .sort((a, b) =>
@@ -624,7 +628,7 @@ function showMatchResult() {
   });
   const me = board.find(r => r.key === vs.myId);
   const won = me?.rank === 1;
-  if (won) { confetti(); sfx.win(); }
+  if (won) { confetti(); sfx.win(); happytime(); }
 
   const medals = ['🥇', '🥈', '🥉'];
   $('#result-fail').style.display = 'none';
@@ -672,6 +676,7 @@ function endMatchAbrupt(msg) {
 
 export async function leave() {
   clearTimers();
+  gameplayStop();
   vs.round?.destroy(); vs.round = null;
   vs.active = false; vs.inRound = false; vs.matchOver = false;
   document.body.classList.remove('versus', 'player-done', 'review');

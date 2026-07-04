@@ -3,25 +3,27 @@ import { loadPuzzles, levelSequence, poolSize } from './data.js';
 import { Round } from './game.js';
 import { sfx, toggleMute, isMuted, vibrate } from './audio.js';
 import { confetti } from './confetti.js';
+import { storeGet, storeSet } from './store.js';
 import * as versus from './versus.js';
+import * as portal from './portal.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
 const VALID_MODES = ['toon', 'photo', 'mixed'];
-const storedMode = localStorage.getItem('sh_mode');
+const storedMode = storeGet('sh_mode');
 const state = {
   mode: VALID_MODES.includes(storedMode) ? storedMode : 'toon',
   sequence: [],
   round: null,
   puzzle: null,
-  stats: JSON.parse(localStorage.getItem('sh_stats') || '{"solved":0,"found":0,"stars3":0}'),
+  stats: JSON.parse(storeGet('sh_stats') || '{"solved":0,"found":0,"stars3":0}'),
 };
 
 const levelKey = () => `sh_level_${state.mode}`;
-const getLevel = () => parseInt(localStorage.getItem(levelKey()) || '0', 10);
-const setLevel = v => localStorage.setItem(levelKey(), String(v));
-const saveStats = () => localStorage.setItem('sh_stats', JSON.stringify(state.stats));
+const getLevel = () => parseInt(storeGet(levelKey()) || '0', 10);
+const setLevel = v => storeSet(levelKey(), String(v));
+const saveStats = () => storeSet('sh_stats', JSON.stringify(state.stats));
 
 /* ---------- screens ---------- */
 function show(screen) {
@@ -61,7 +63,7 @@ async function startLevel() {
   $('#game-level').textContent = `Level ${lvl + 1}`;
   $('#found-count').textContent = `0/${state.puzzle.count}`;
   renderDots(0, state.puzzle.count);
-  $('#btn-hint').classList.remove('used');
+  renderHintBtn('ready');
 
   // load both images, covered by the countdown veil
   $('#veil').classList.add('on');
@@ -102,6 +104,15 @@ async function startLevel() {
   }
   $('#veil').classList.remove('on');
   state.round.start();
+  portal.gameplayStart();
+}
+
+// hint button states: ready (free hint) / ad (watch a rewarded ad for one more) / used
+function renderHintBtn(mode) {
+  const b = $('#btn-hint');
+  b.classList.toggle('used', mode === 'used');
+  b.classList.toggle('ad', mode === 'ad');
+  b.innerHTML = mode === 'ad' ? '💡<b>AD</b>' : '💡<b>1</b>';
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -121,6 +132,8 @@ function onProgress(found, total) {
 }
 
 function onWin({ stars, misses, timeUsed }) {
+  portal.gameplayStop();
+  if (stars === 3) portal.happytime();
   state.stats.solved++;
   state.stats.found += state.puzzle.count;
   if (stars === 3) state.stats.stars3++;
@@ -139,6 +152,7 @@ function onWin({ stars, misses, timeUsed }) {
 }
 
 async function onLose({ found, total }) {
+  portal.gameplayStop();
   // brief answer reveal before the result card
   state.round?.revealAnswers();
   await sleep(2600);
@@ -167,14 +181,28 @@ function bind() {
   $('#btn-back').addEventListener('click', () => {
     sfx.click();
     if (versus.isActive()) { versus.leave(); updateHome(); return; }
+    portal.gameplayStop();
     state.round?.destroy(); state.round = null;
     closeResult();
     updateHome();
     show('home');
   });
 
-  $('#btn-hint').addEventListener('click', () => {
-    if (state.round?.hint()) $('#btn-hint').classList.add('used');
+  $('#btn-hint').addEventListener('click', async () => {
+    const b = $('#btn-hint');
+    if (b.classList.contains('ad')) {
+      // rewarded refill: one ad buys one more hint, repeatable while playing
+      renderHintBtn('used');
+      const granted = await portal.rewardedAd();
+      if (granted) {
+        state.round?.rewardHint();
+        renderHintBtn(state.round?.running ? 'ad' : 'used');
+      } else {
+        renderHintBtn('ad');
+      }
+      return;
+    }
+    if (state.round?.hint()) renderHintBtn(portal.rewardedOn() ? 'ad' : 'used');
   });
 
   $('#btn-zoom-reset').addEventListener('click', () => {
@@ -190,7 +218,8 @@ function bind() {
   $('#btn-next').addEventListener('click', () => {
     sfx.click();
     if (versus.isActive()) { versus.nextAction(); return; }
-    closeResult(); startLevel();
+    closeResult();
+    portal.maybeMidgame(() => startLevel());
   });
   $('#btn-result-home').addEventListener('click', () => {
     sfx.click();
@@ -210,10 +239,15 @@ function bind() {
     } catch {}
   });
 
+  // portals forbid external links and install prompts
+  if (portal.inPortal) $('#btn-share').style.display = 'none';
+
   // custom PWA install prompt
   let deferred = null;
   window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault(); deferred = e;
+    e.preventDefault();
+    if (portal.inPortal) return;
+    deferred = e;
     $('#btn-install').style.display = '';
   });
   $('#btn-install').addEventListener('click', async () => {
@@ -228,15 +262,21 @@ function bind() {
 /* ---------- boot ---------- */
 (async function init() {
   bind();
+  // ads freeze the running round's timer and resume it after
+  portal.onAdBreak(() => state.round?._pause(), () => state.round?._resume());
+  await portal.portalInit();
+  portal.loadingStart();
   try {
     await loadPuzzles();
   } catch (e) {
     $('#home-pool').textContent = 'offline — check connection';
   }
+  portal.loadingStop();
   state.sequence = levelSequence(state.mode);
   updateHome();
   show('home');
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // no service worker inside portal iframes (their CDN serves the files)
+  if ('serviceWorker' in navigator && !portal.inPortal) navigator.serviceWorker.register('sw.js').catch(() => {});
   // expose for E2E tests
-  window.__sh = { state, startLevel, versus };
+  window.__sh = { state, startLevel, versus, portal };
 })();

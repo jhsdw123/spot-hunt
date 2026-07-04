@@ -244,6 +244,12 @@ export class Round {
     if (this.timeLeft <= 0) this._lose();
   }
 
+  // rewarded-ad refill: re-arm the single hint slot and fire it
+  rewardHint() {
+    this.hintsUsed = 0;
+    return this.hint();
+  }
+
   hint() {
     if (this.hintsUsed >= 1 || this.finished || !this.running) return false;
     const unfound = this.puzzle.regions.map((_, i) => i).filter(i => !this.found.has(i));

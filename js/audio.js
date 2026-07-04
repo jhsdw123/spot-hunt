@@ -1,6 +1,9 @@
 // Tiny WebAudio SFX — synthesized, no asset files.
+import { storeGet, storeSet } from './store.js';
+
 let ctx = null;
-let muted = localStorage.getItem('sh_muted') === '1';
+let muted = storeGet('sh_muted') === '1';
+let ducked = false; // temporary silence while a portal ad plays (doesn't touch the user's mute)
 
 function ac() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -9,7 +12,7 @@ function ac() {
 }
 
 function tone(freq, dur, { type = 'sine', gain = 0.12, when = 0, slide = 0 } = {}) {
-  if (muted) return;
+  if (muted || ducked) return;
   const c = ac();
   const t0 = c.currentTime + when;
   const o = c.createOscillator();
@@ -42,8 +45,9 @@ export const sfx = {
 
 export function toggleMute() {
   muted = !muted;
-  localStorage.setItem('sh_muted', muted ? '1' : '0');
+  storeSet('sh_muted', muted ? '1' : '0');
   return muted;
 }
 export function isMuted() { return muted; }
+export function setDucked(v) { ducked = !!v; }
 export function vibrate(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); }
