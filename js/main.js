@@ -259,7 +259,10 @@ function bind() {
   });
 
   // portals forbid external links and install prompts
-  if (portal.inPortal) $('#btn-share').style.display = 'none';
+  if (portal.inPortal) {
+    $('#btn-share').style.display = 'none';
+    $('#btn-youtube').style.display = 'none';
+  }
 
   // custom PWA install prompt
   let deferred = null;
