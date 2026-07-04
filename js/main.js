@@ -122,7 +122,7 @@ function renderHintBtn(mode) {
   const b = $('#btn-hint');
   b.classList.toggle('used', mode === 'used');
   b.classList.toggle('ad', mode === 'ad');
-  b.innerHTML = mode === 'ad' ? '💡<b>AD</b>' : '💡<b>1</b>';
+  b.innerHTML = mode === 'ad' ? 'HINT<b>AD</b>' : 'HINT<b>1</b>';
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

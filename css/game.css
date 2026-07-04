@@ -352,6 +352,17 @@ body.player-done .panel { border-color: rgba(255, 255, 255, 0.05); }
 .strip-btn b { color: #ffb03a; font-size: 0.62rem; margin-left: 2px; }
 .strip-btn.used { opacity: 0.35; pointer-events: none; }
 .strip-btn.ad { border-color: #ffb03a; box-shadow: 0 0 10px rgba(255, 176, 58, 0.35); }
+#btn-hint {
+  width: auto; padding: 0 11px;
+  font-weight: 800; font-size: 0.72rem; letter-spacing: 0.6px; color: #e8eaf6;
+}
+/* tablets/desktop: the coach bubbles sit center-screen, so the progress pill
+   and HINT belong front-and-center at the top, not split across corners */
+@media (min-width: 700px) {
+  .found-row { justify-content: center; }
+  .found-row .strip-spacer { flex: 0 0 14px; }
+  .opp-list { margin-left: 0; }
+}
 #found-dots { display: flex; gap: 6px; }
 .dot {
   width: 14px; height: 14px; border-radius: 50%;

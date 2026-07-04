@@ -88,8 +88,9 @@ export async function homeTour() {
 }
 
 /* ---------- guided first puzzle ---------- */
-// fixed pair: clean-lined playground cartoon with 5 unambiguous differences
-export const TUTORIAL_ID = 'toon_mr4pj0f6_0';
+// fixed pair: clean-lined bear-picnic cartoon, 5 unambiguous differences,
+// regions hand-verified by the author (Flow AI batch — not auto-detected)
+export const TUTORIAL_ID = 'sd_mr4rwrru_loz3';
 
 let t = null; // { step, hintShown, idleTimer }
 
@@ -157,7 +158,7 @@ async function hintLesson(round) {
   round._pause();
   await coach({
     targets: [$('#btn-hint')],
-    html: `Can't spot one? Tap <b>💡</b> — the clock freezes, you get a <b>3·2·1</b> heads-up, then the two pictures flash <b>A·B·A·B</b> super fast so the difference jumps right out. <b>Once per game!</b>`,
+    html: `Can't spot one? Tap <b>HINT</b> — the clock freezes, you get a <b>3·2·1</b> heads-up, then the two pictures flash <b>A·B·A·B</b> super fast so the difference jumps right out. <b>Once per game!</b>`,
     next: 'Got it',
   });
   if (!round.destroyed && !round.finished) round._resume();
