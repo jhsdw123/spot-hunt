@@ -67,7 +67,21 @@ async function startLevel() {
   $('#veil').classList.add('on');
   $('#veil-num').textContent = '';
   const [a, b] = [$('#img-a'), $('#img-b')];
-  await Promise.all([setImg(a, state.puzzle.aUrl), setImg(b, state.puzzle.bUrl)]);
+  try {
+    await Promise.all([setImg(a, state.puzzle.aUrl), setImg(b, state.puzzle.bUrl)]);
+  } catch {
+    // flaky network: retry once, then return home instead of a stuck veil
+    try {
+      a.src = ''; b.src = '';
+      await sleep(1000);
+      await Promise.all([setImg(a, state.puzzle.aUrl), setImg(b, state.puzzle.bUrl)]);
+    } catch {
+      $('#veil').classList.remove('on');
+      $('#home-pool').textContent = 'connection hiccup — tap PLAY to retry';
+      show('home');
+      return;
+    }
+  }
 
   state.round?.destroy();
   state.round = new Round(state.puzzle, {

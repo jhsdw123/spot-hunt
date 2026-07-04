@@ -18,6 +18,12 @@ const setImg = (img, src) => new Promise((res, rej) => {
   if (img.src === src && img.complete) return res();
   img.onload = res; img.onerror = rej; img.src = src;
 });
+async function loadRoundImages(puzzle) {
+  for (const [img, url] of [[$('#img-a'), puzzle.aUrl], [$('#img-b'), puzzle.bUrl]]) {
+    try { await setImg(img, url); }
+    catch { img.src = ''; await sleep(1000); await setImg(img, url); }
+  }
+}
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const ordinal = n => n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
 
@@ -26,6 +32,8 @@ const vs = {
   myId: Math.random().toString(36).slice(2, 10),
   myName: localStorage.getItem('sh_name') || '',
   style: 'toon',
+  hostKey: '',           // presence key of the match host (from start_match)
+  raceBanner: '',        // "X found them all!" — kept visible through answer check
   roster: [],            // fixed at match start: [{key, name}]
   leftKeys: new Set(),   // players who disconnected mid-match
   puzzles: [], roundIdx: 0,
@@ -109,12 +117,14 @@ async function joinRoom() {
   vs.isHost = false;
   vs.code = code;
   await joinChannel();
+  // a room only exists if its HOST is present — two guests mistyping the same
+  // code must not see each other and settle into a hostless ghost room
   let others = [];
-  for (let i = 0; i < 20 && !others.length; i++) {
+  for (let i = 0; i < 20 && !others.some(o => o.host); i++) {
     await sleep(300);
     others = othersInRoom();
   }
-  if (!others.length) {
+  if (!others.some(o => o.host)) {
     setEntryMsg('Room not found — check the code');
     await leaveChannel();
     return;
@@ -126,14 +136,30 @@ async function joinRoom() {
   }
   $('#vs-code-guest').textContent = vs.code;
   step('guest');
+  syncGuestStatus();
   renderLobby();
+}
+
+// guest lobby status: host gone / match running / plain waiting
+function syncGuestStatus() {
+  const el = $('#vs-status-guest');
+  if (!el) return;
+  const players = playersInRoom();
+  el.textContent = !players.some(p => p.host) ? '⚠ The host left — go back and try another code'
+    : players.some(p => p.playing) ? '🎮 Match in progress — you’ll join the next game'
+    : 'Waiting for the host to start…';
 }
 
 function setEntryMsg(t) { $('#vs-entry-msg').textContent = t; }
 
 function playersInRoom() {
   const state = vs.channel?.presenceState() || {};
-  return Object.entries(state).map(([key, metas]) => ({ key, name: metas[0]?.name || 'Player' }));
+  return Object.entries(state).map(([key, metas]) => ({
+    key,
+    name: metas[0]?.name || 'Player',
+    host: !!metas[0]?.host,
+    playing: !!metas[0]?.playing,
+  }));
 }
 function othersInRoom() { return playersInRoom().filter(p => p.key !== vs.myId); }
 
@@ -158,7 +184,7 @@ async function joinChannel() {
       if (status === 'CHANNEL_ERROR') { clearTimeout(t); rej(new Error('channel error')); }
     });
   });
-  await ch.track({ name: vs.myName });
+  await ch.track({ name: vs.myName, host: vs.isHost });
 }
 
 async function leaveChannel() {
@@ -260,6 +286,11 @@ function onPresence() {
     setStatus(n < 2 ? 'Waiting for players…' : `${n} players in — ready when you are!`);
   }
 
+  // guest waiting in the lobby: reflect host departure / running match live
+  if (!vs.isHost && !vs.active && $('[data-step="guest"]').classList.contains('on')) {
+    syncGuestStatus();
+  }
+
   if (vs.active) {
     // mark leavers; settle may now be possible
     const present = new Set(players.map(p => p.key));
@@ -269,10 +300,28 @@ function onPresence() {
         renderOppList();
       }
     }
+    // match already decided: players drifting off the scoreboard must never
+    // kick the viewer — just keep the rematch button honest
+    if (vs.matchOver) { syncMatchOverButtons(); return; }
     const remaining = vs.roster.filter(p => !vs.leftKeys.has(p.key));
     if (remaining.length < 2) { endMatchAbrupt('Everyone else left the game'); return; }
     maybeSettle();
     maybeGoHost();
+  }
+}
+
+// final scoreboard stays viewable as players come and go; the room stays open,
+// so a host can still rematch whoever is (or joins) in the room
+function syncMatchOverButtons() {
+  if (!vs.matchOver) return;
+  const btn = $('#btn-next');
+  if (vs.isHost) {
+    const n = playersInRoom().length;
+    btn.disabled = n < 2;
+    btn.textContent = n < 2 ? 'Waiting for players…' : 'Rematch ↻';
+  } else if (vs.hostKey && vs.leftKeys.has(vs.hostKey)) {
+    btn.textContent = 'Host left — game over';
+    btn.disabled = true;
   }
 }
 
@@ -287,20 +336,28 @@ function pickPuzzles(all, style) {
 async function hostStart() {
   const all = await loadPuzzles();
   const ids = pickPuzzles(all, vs.style);
-  const roster = playersInRoom();
-  send('start_match', { ids, roster });
-  await onStartMatch({ ids, roster });
+  const roster = playersInRoom().map(p => ({ key: p.key, name: p.name }));
+  send('start_match', { ids, roster, hostKey: vs.myId });
+  await onStartMatch({ ids, roster, hostKey: vs.myId });
 }
 
-async function onStartMatch({ ids, roster }) {
+async function onStartMatch({ ids, roster, hostKey }) {
   const all = await loadPuzzles();
   vs.puzzles = ids.map(id => all.find(e => e.id === id)).filter(Boolean);
   vs.roster = roster;
+  vs.hostKey = hostKey || '';
   vs.leftKeys = new Set();
   vs.roundIdx = 0;
   vs.tally = Object.fromEntries(roster.map(p => [p.key, { wins: 0, found: 0, elapsed: 0 }]));
   vs.active = true;
   vs.matchOver = false;
+  // a rematch can start while this player is still viewing the old scoreboard
+  $('#result').classList.remove('on');
+  $('#result-list').style.display = 'none';
+  $('#btn-next').disabled = false;
+  $('#btn-next').style.display = '';
+  $('#btn-result-home').style.display = '';
+  try { vs.channel?.track({ name: vs.myName, host: vs.isHost, playing: true }); } catch {}
   document.body.classList.add('versus');
   beginRound();
 }
@@ -313,6 +370,7 @@ async function beginRound() {
   const puzzle = vs.puzzles[vs.roundIdx];
   vs.results = {}; vs.readySet = new Set([vs.myId]);
   vs.inRound = true; vs.personalDone = false; vs.hurryFired = false; vs._counting = false;
+  vs.raceBanner = '';
   vs.roster.forEach(p => { p.progress = 0; p.status = ''; });
   document.body.classList.remove('player-done', 'review');
 
@@ -325,7 +383,14 @@ async function beginRound() {
   $('#veil').classList.add('on');
   $('#veil-num').textContent = '…';
 
-  await Promise.all([setImg($('#img-a'), puzzle.aUrl), setImg($('#img-b'), puzzle.bUrl)]);
+  // a failed image load must not strand this player at the "…" veil while
+  // everyone else waits on their ready signal — retry once, then bail cleanly
+  try {
+    await loadRoundImages(puzzle);
+  } catch {
+    endMatchAbrupt("Couldn't load the puzzle images — check your connection and rejoin");
+    return;
+  }
 
   vs.round?.destroy();
   vs.round = new Round(puzzle, {
@@ -464,7 +529,8 @@ function onOppRoundDone(payload) {
   if (payload.complete && !vs.results[vs.myId] && vs.round && !vs.round.finished) {
     vs.round.halt();
     myRoundDone({ complete: false, found: vs.round.found.size, elapsed: +vs.round.elapsed.toFixed(2) });
-    showDoneBanner(`🏁 ${esc(opp.name)} found them all!`);
+    vs.raceBanner = `🏁 ${opp.name} found them all!`;
+    showDoneBanner(vs.raceBanner);
     return;
   }
   maybeSettle();
@@ -502,7 +568,7 @@ async function settle(participants) {
   // feature 3: answer review window before the scoreboard
   document.body.classList.add('review');
   vs.round?.revealAnswers();
-  showDoneBanner('🔍 Answer check…');
+  showDoneBanner(vs.raceBanner ? `${vs.raceBanner} · Answer check` : '🔍 Answer check…');
   await sleep(3000);
   hideDoneBanner();
   document.body.classList.remove('review', 'player-done');
@@ -579,6 +645,7 @@ function showMatchResult() {
   $('#btn-next').disabled = !vs.isHost;
   $('#result').classList.add('on');
   vs.matchOver = true;
+  syncMatchOverButtons(); // players may already have left mid-match
 }
 
 export async function nextAction() {
