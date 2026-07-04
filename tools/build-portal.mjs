@@ -38,7 +38,13 @@ for (const [portal, { stamp, bundleLibrary }] of Object.entries(PORTALS)) {
 
   const zip = join(DIST, `spot-hunt-${portal}.zip`);
   rmSync(zip, { force: true });
-  execSync(`powershell -NoProfile -Command "Compress-Archive -Path '${out}\\*' -DestinationPath '${zip}' -Force"`);
+  // Windows bsdtar produces a fully standard zip (incl. directory entries) —
+  // PowerShell's Compress-Archive omits directory entries, which some server-side
+  // unzippers reject; GNU tar (git) would parse "C:" as a remote host, so use
+  // System32's bsdtar explicitly. Items are listed by name so entries sit at the
+  // zip root (a "-C dir ." archive prefixes everything with "./").
+  const items = readdirSync(out).map(n => `"${n}"`).join(' ');
+  execSync(`C:\\Windows\\System32\\tar.exe -a -cf "${zip}" -C "${out}" ${items}`, { stdio: 'pipe' });
 
   // report package size/count (CrazyGames limits: <=50MB initial, <=1500 files)
   let files = 0, bytes = 0;
