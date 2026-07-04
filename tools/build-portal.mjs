@@ -11,18 +11,22 @@ const gdIdx = process.argv.indexOf('--gd-id');
 const GD_ID = gdIdx > -1 ? process.argv[gdIdx + 1] : '';
 
 const PORTALS = {
-  crazygames: `<script>window.SH_PORTAL='crazygames'</script>`,
-  gd: `<script>window.SH_PORTAL='gd';window.SH_GD_GAME_ID='${GD_ID || 'REPLACE_WITH_GD_GAME_ID'}'</script>`,
+  // CrazyGames forbids external/absolute asset paths — bundle the whole puzzle
+  // library so the package is fully self-contained (well under their 250MB cap)
+  crazygames: { stamp: `<script>window.SH_PORTAL='crazygames';window.SH_LIB_BASE='library'</script>`, bundleLibrary: true },
+  gd: { stamp: `<script>window.SH_PORTAL='gd';window.SH_GD_GAME_ID='${GD_ID || 'REPLACE_WITH_GD_GAME_ID'}'</script>`, bundleLibrary: false },
 };
 
 // portal builds: no PWA bits (no SW registration happens in portal mode anyway)
 const COPY = ['index.html', 'css', 'js', 'vendor', 'icons'];
+const LIBRARY = resolve(ROOT, '../spot-difference-studio/library');
 
-for (const [portal, stamp] of Object.entries(PORTALS)) {
+for (const [portal, { stamp, bundleLibrary }] of Object.entries(PORTALS)) {
   const out = join(DIST, portal);
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   for (const item of COPY) cpSync(join(ROOT, item), join(out, item), { recursive: true });
+  if (bundleLibrary) cpSync(LIBRARY, join(out, 'library'), { recursive: true });
 
   let html = readFileSync(join(out, 'index.html'), 'utf8');
   html = html

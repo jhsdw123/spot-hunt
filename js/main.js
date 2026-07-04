@@ -284,6 +284,10 @@ function bind() {
   // ads freeze the running round's timer and resume it after
   portal.onAdBreak(() => state.round?._pause(), () => state.round?._resume());
   await portal.portalInit();
+  // the CG data module (account saves) comes online with init — re-read state
+  state.stats = JSON.parse(storeGet('sh_stats') || '{"solved":0,"found":0,"stars3":0}');
+  const savedMode = storeGet('sh_mode');
+  if (VALID_MODES.includes(savedMode)) state.mode = savedMode;
   portal.loadingStart();
   try {
     await loadPuzzles();
@@ -298,8 +302,15 @@ function bind() {
   if ('serviceWorker' in navigator && !portal.inPortal) navigator.serviceWorker.register('sw.js').catch(() => {});
   // expose for E2E tests
   window.__sh = { state, startLevel, versus, portal };
-  // first visit: walk through the buttons, then offer a guided first puzzle
+  // first visit: portals require landing in gameplay immediately (≤1 click),
+  // so there we skip straight into the guided tutorial puzzle; on the web,
+  // walk through the buttons first, then offer it
   if (tut.tourNeeded() && state.sequence.length) {
-    if (await tut.homeTour()) startLevel({ tutorial: true });
+    if (portal.inPortal) {
+      tut.markSeen();
+      startLevel({ tutorial: true });
+    } else if (await tut.homeTour()) {
+      startLevel({ tutorial: true });
+    }
   }
 })();

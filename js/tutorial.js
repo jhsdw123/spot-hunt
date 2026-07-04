@@ -6,7 +6,7 @@ import { storeGet, storeSet } from './store.js';
 const $ = s => document.querySelector(s);
 
 export function tourNeeded() { return storeGet('sh_tour') !== '1'; }
-const markSeen = () => storeSet('sh_tour', '1');
+export const markSeen = () => storeSet('sh_tour', '1');
 
 function rectUnion(els) {
   const rs = els.filter(Boolean).map(e => e.getBoundingClientRect());
