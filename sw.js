@@ -1,10 +1,10 @@
 // Spot Hunt service worker — app shell precache + runtime image caching.
-const SHELL_CACHE = 'sh-shell-v8';
+const SHELL_CACHE = 'sh-shell-v9';
 const IMG_CACHE = 'sh-img-v1';
 const SHELL = [
   './', 'index.html', 'css/game.css',
   'js/main.js', 'js/game.js', 'js/data.js', 'js/audio.js', 'js/confetti.js',
-  'js/versus.js', 'js/config.js', 'js/portal.js', 'js/store.js', 'vendor/supabase.js',
+  'js/versus.js', 'js/config.js', 'js/portal.js', 'js/store.js', 'js/tutorial.js', 'vendor/supabase.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

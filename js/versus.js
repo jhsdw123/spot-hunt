@@ -378,7 +378,7 @@ async function beginRound() {
 
   show('game');
   $('#game-level').textContent = `Round ${vs.roundIdx + 1}/${ROUNDS}`;
-  $('#found-count').textContent = `0/${puzzle.count}`;
+  renderFound(0, puzzle.count);
   renderDots(0, puzzle.count);
   renderOppList();
   renderScoreline();
@@ -402,7 +402,7 @@ async function beginRound() {
     timerText: $('#timer-text'),
   }, {
     onProgress: (found, total) => {
-      $('#found-count').textContent = `${found}/${total}`;
+      renderFound(found, total);
       renderDots(found, total);
       send('progress', { round: vs.roundIdx, found });
     },
@@ -691,6 +691,10 @@ export async function leave() {
 }
 
 /* ---------- render helpers ---------- */
+function renderFound(found, total) {
+  $('#found-count').innerHTML = `<b>${found}</b><i>/${total}</i>`;
+}
+
 function renderDots(found, total) {
   $('#found-dots').innerHTML = Array.from({ length: total }, (_, i) =>
     `<span class="dot${i < found ? ' on' : ''}"></span>`).join('');

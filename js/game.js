@@ -27,6 +27,15 @@ export class Round {
     this._tickSec = -1;
     this._handlers = [];
     this._bindPanels();
+    // hint overlays: each panel gets the OTHER picture, flashed on demand
+    this._blinks = this.els.inners.map((inner, i) => {
+      const img = document.createElement('img');
+      img.className = 'blink-img';
+      img.draggable = false;
+      img.src = i === 0 ? puzzle.bUrl : puzzle.aUrl;
+      inner.appendChild(img);
+      return img;
+    });
     this._onVis = () => {
       if (!this.pauseOnHide) {
         // rAF stops while hidden; on return the first frame's dt covers the whole
@@ -85,7 +94,7 @@ export class Round {
     cancelAnimationFrame(this._raf);
     document.removeEventListener('visibilitychange', this._onVis);
     for (const [el, type, fn] of this._handlers) el.removeEventListener(type, fn);
-    this.els.panels.forEach(p => p.querySelectorAll('.marker,.hint-ring,.miss-x,.reveal-ring').forEach(m => m.remove()));
+    this.els.panels.forEach(p => p.querySelectorAll('.marker,.hint-ring,.miss-x,.reveal-ring,.blink-img').forEach(m => m.remove()));
   }
 
   /* ---------- timer ---------- */
@@ -250,20 +259,17 @@ export class Round {
     return this.hint();
   }
 
+  // blink-comparator hint: flash the other picture on top of each panel for
+  // ~0.6s — the differences flicker while everything else stays still
   hint() {
     if (this.hintsUsed >= 1 || this.finished || !this.running) return false;
-    const unfound = this.puzzle.regions.map((_, i) => i).filter(i => !this.found.has(i));
-    if (!unfound.length) return false;
+    if (this.found.size >= this.puzzle.count) return false;
     this.hintsUsed++;
-    const r = this.puzzle.regions[unfound[(Math.random() * unfound.length) | 0]];
     sfx.hint();
-    this.els.inners.forEach(inner => {
-      const ring = document.createElement('div');
-      ring.className = 'hint-ring';
-      ring.style.left = `${r.x}%`; ring.style.top = `${r.y}%`;
-      ring.style.width = ring.style.height = `${Math.max(r.radius, 5) * 2.6}%`;
-      inner.appendChild(ring);
-      setTimeout(() => ring.remove(), 1800);
+    this._blinks.forEach(b => {
+      b.classList.remove('on'); void b.offsetWidth;
+      b.classList.add('on');
+      setTimeout(() => b.classList.remove('on'), 700);
     });
     return true;
   }

@@ -6,6 +6,7 @@ import { confetti } from './confetti.js';
 import { storeGet, storeSet } from './store.js';
 import * as versus from './versus.js';
 import * as portal from './portal.js';
+import * as tut from './tutorial.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -43,7 +44,7 @@ function updateHome() {
 }
 
 /* ---------- round flow ---------- */
-async function startLevel() {
+async function startLevel(opts = {}) {
   // recover if the puzzle list wasn't loaded yet (flaky first fetch / offline start)
   if (!state.sequence.length) {
     try {
@@ -61,7 +62,7 @@ async function startLevel() {
   state.puzzle = state.sequence[lvl];
   show('game');
   $('#game-level').textContent = `Level ${lvl + 1}`;
-  $('#found-count').textContent = `0/${state.puzzle.count}`;
+  renderFound(0, state.puzzle.count);
   renderDots(0, state.puzzle.count);
   renderHintBtn('ready');
 
@@ -105,6 +106,11 @@ async function startLevel() {
   $('#veil').classList.remove('on');
   state.round.start();
   portal.gameplayStart();
+  if (opts.tutorial) tut.roundBegin(state.round);
+}
+
+function renderFound(found, total) {
+  $('#found-count').innerHTML = `<b>${found}</b><i>/${total}</i>`;
 }
 
 // hint button states: ready (free hint) / ad (watch a rewarded ad for one more) / used
@@ -127,11 +133,13 @@ function renderDots(found, total) {
 }
 
 function onProgress(found, total) {
-  $('#found-count').textContent = `${found}/${total}`;
+  renderFound(found, total);
   renderDots(found, total);
+  tut.roundProgress(state.round, found, total);
 }
 
 function onWin({ stars, misses, timeUsed }) {
+  tut.roundEnd();
   portal.gameplayStop();
   if (stars === 3) portal.happytime();
   state.stats.solved++;
@@ -152,6 +160,7 @@ function onWin({ stars, misses, timeUsed }) {
 }
 
 async function onLose({ found, total }) {
+  tut.roundEnd();
   portal.gameplayStop();
   // brief answer reveal before the result card
   state.round?.revealAnswers();
@@ -181,11 +190,18 @@ function bind() {
   $('#btn-back').addEventListener('click', () => {
     sfx.click();
     if (versus.isActive()) { versus.leave(); updateHome(); return; }
+    tut.roundEnd();
     portal.gameplayStop();
     state.round?.destroy(); state.round = null;
     closeResult();
     updateHome();
     show('home');
+  });
+
+  // replayable onboarding tour
+  $('#btn-help').addEventListener('click', async () => {
+    sfx.click();
+    if (await tut.homeTour()) startLevel({ tutorial: true });
   });
 
   $('#btn-hint').addEventListener('click', async () => {
@@ -279,4 +295,8 @@ function bind() {
   if ('serviceWorker' in navigator && !portal.inPortal) navigator.serviceWorker.register('sw.js').catch(() => {});
   // expose for E2E tests
   window.__sh = { state, startLevel, versus, portal };
+  // first visit: walk through the buttons, then offer a guided first puzzle
+  if (tut.tourNeeded() && state.sequence.length) {
+    if (await tut.homeTour()) startLevel({ tutorial: true });
+  }
 })();
