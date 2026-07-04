@@ -468,6 +468,12 @@ body.player-done .panel { border-color: rgba(255, 255, 255, 0.05); }
   100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
 }
 
+/* portal chat kill-switch (CrazyGames disableChat setting) */
+body.no-chat .vs-chat-box,
+body.no-chat #btn-chat,
+body.no-chat #chat-panel,
+body.no-chat #chat-feed { display: none !important; }
+
 /* ---------- onboarding tour ---------- */
 #tour { position: fixed; inset: 0; z-index: 80; }
 .tour-spot {

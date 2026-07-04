@@ -39,10 +39,10 @@ export async function portalInit() {
       const sdk = window.CrazyGames?.SDK;
       await sdk.init();
       if (sdk.environment !== 'disabled') cg = sdk;
-      // the site-level mute button must override in-game audio settings
+      // site-level settings override in-game ones: mute + chat kill-switch
       if (cg) {
-        setPlatformMuted(!!cg.game.settings?.muteAudio);
-        cg.game.addSettingsChangeListener?.(s => setPlatformMuted(!!s?.muteAudio));
+        applySettings(cg.game.settings);
+        cg.game.addSettingsChangeListener?.(applySettings);
       }
     } catch { cg = null; }
   } else if (PORTAL === 'gd') {
@@ -55,6 +55,15 @@ export async function portalInit() {
     };
     if (!window.gdsdk) loadScript('https://html5.api.gamedistribution.com/main.min.js').catch(() => {});
   }
+}
+
+let chatOff = false;
+export function chatDisabled() { return chatOff; }
+
+function applySettings(s) {
+  setPlatformMuted(!!s?.muteAudio);
+  chatOff = !!s?.disableChat;
+  document.body.classList.toggle('no-chat', chatOff);
 }
 
 /* ---------- CrazyGames party / invite integration ---------- */

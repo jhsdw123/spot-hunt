@@ -6,7 +6,7 @@ import { Round } from './game.js';
 import { sfx, vibrate } from './audio.js';
 import { confetti } from './confetti.js';
 import { storeGet, storeSet } from './store.js';
-import { gameplayStart, gameplayStop, happytime, inviteButton, hideInvite } from './portal.js';
+import { gameplayStart, gameplayStop, happytime, inviteButton, hideInvite, chatDisabled } from './portal.js';
 import { SUPABASE_URL, SUPABASE_ANON } from './config.js';
 
 // basic profanity filter — the mandatory minimum for chat on CrazyGames;
@@ -237,6 +237,7 @@ function pushChat(m) {
 }
 
 function onChat({ from, name, text }) {
+  if (chatDisabled()) return; // portal-level chat kill-switch
   if (typeof text !== 'string' || !text.trim()) return;
   const msg = { from, name: clean(String(name || 'Player').slice(0, 12)), text: clean(String(text).slice(0, 120)) };
   pushChat(msg);
@@ -249,6 +250,7 @@ function onChat({ from, name, text }) {
 }
 
 function sendChat(inputEl) {
+  if (chatDisabled()) return;
   const text = clean(inputEl.value.trim().slice(0, 120));
   if (!text || !vs.channel) return;
   inputEl.value = '';
