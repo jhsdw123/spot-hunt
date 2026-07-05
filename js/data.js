@@ -1,7 +1,7 @@
 // Puzzle data source — the Spot the Difference Studio library. Portal builds
 // bundle it inside the package (SH_LIB_BASE stamp) so the game is fully
 // self-contained; the web build reads it from the studio's GitHub Pages.
-const LIB_BASE = window.SH_LIB_BASE || 'https://jhsdw123.github.io/spot-difference-studio/library';
+const LIB_BASE = window.SH_LIB_BASE || 'https://spothuntstudio.com/spot-difference-studio/library';
 
 let entries = null;
 

@@ -3,7 +3,7 @@
 Mobile-first PWA: find the differences before time runs out.
 Puzzle data comes from the Spot the Difference Studio library (same GitHub Pages origin).
 
-**Play:** https://jhsdw123.github.io/spot-hunt/
+**Play:** https://spothuntstudio.com/spot-hunt/
 
 - Cartoon / Photo / Mixed modes, deterministic level order
 - Pinch zoom (synced across both panels), tap hit-testing, haptics, WebAudio SFX
